@@ -69,11 +69,17 @@ func mask(src string) string {
 		start += i
 		b.WriteString(src[i:start])
 		end := actionEnd(src, start+2)
+		// A comment produces nothing, so it is masked as spaces: a template
+		// may open with one, before its root element.
+		fill := css.Masked
+		if isComment(src, start+2) {
+			fill = ' '
+		}
 		for _, r := range src[start:end] {
 			if r == '\n' {
 				b.WriteRune('\n')
 			} else {
-				b.WriteRune(css.Masked)
+				b.WriteRune(fill)
 			}
 		}
 		i = end
@@ -81,11 +87,17 @@ func mask(src string) string {
 	return b.String()
 }
 
+// isComment reports whether the action whose body begins at from is a comment:
+// {{/* … */}} or {{- /* … */ -}}.
+func isComment(src string, from int) bool {
+	return strings.HasPrefix(src[from:], "/*") || strings.HasPrefix(src[from:], "- /*")
+}
+
 // actionEnd returns the offset just past the "}}" that closes the action whose
 // body begins at from, or len(src) when it is not closed — which html/template
 // reports on its own when it parses the file.
 func actionEnd(src string, from int) int {
-	if strings.HasPrefix(src[from:], "/*") || strings.HasPrefix(src[from:], "- /*") {
+	if isComment(src, from) {
 		if end := strings.Index(src[from:], "*/"); end >= 0 {
 			if close := strings.Index(src[from+end:], "}}"); close >= 0 {
 				return from + end + close + 2

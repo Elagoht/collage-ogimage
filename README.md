@@ -76,7 +76,8 @@ image, 1200×630 unless it says otherwise:
 </div>
 ```
 
-It is `html/template`: values are escaped, `{{if}}` and `{{range}}` work, and in
+It is `html/template`: values are escaped, `{{if}}` and `{{range}}` work, a
+`{{/* comment */}}` may stand anywhere — before the root element too — and in
 development the file is read from disk on every use, so an edit shows on the next
 reload — when the application hands the plugin the template directory on disk in
 development, as the scaffold does for its static files; an `embed.FS` never

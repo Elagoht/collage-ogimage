@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **v0.1.0 — all six phases done** (§12.3).
+Status: **v0.1.1 — all six phases done** (§12.3).
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 

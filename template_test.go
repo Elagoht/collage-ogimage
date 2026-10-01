@@ -35,6 +35,16 @@ func TestTheDocumentedTemplatePasses(t *testing.T) {
 	}
 }
 
+// A comment produces nothing, so a template may open with one, and hold one
+// between a flex container's children.
+func TestCommentsAreNotText(t *testing.T) {
+	src := "{{/* The share card.\n   Two lines. */}}\n" +
+		`<div style="display:flex">{{- /* trimmed */ -}}<span>{{.Title}}</span></div>`
+	if err := checkTemplate("og/post.html", src); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Masking keeps the template's lines and columns: an error after an action is
 // reported where an editor shows it.
 func TestMaskKeepsPositions(t *testing.T) {

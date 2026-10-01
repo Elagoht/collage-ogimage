@@ -4,9 +4,10 @@ A collage plugin that draws each page's share card — the image X, LinkedIn,
 Slack and messengers show for a link — from a template you write in HTML and CSS,
 in pure Go, and serves it at a URL made from its content.
 
-> **Status: in development.** This README describes v0.1 as designed; the
-> specification is [DESIGN.md](DESIGN.md). Nothing is released yet, and `Init`
-> refuses to start until it is.
+> **Status: in development — phase 1 of 6 done.** This README describes v0.1 as
+> designed; the specification is [DESIGN.md](DESIGN.md). The parser and validator
+> for card templates exist; layout, text and drawing do not yet. Nothing is
+> released, and `Init` refuses to start until it is.
 
 ```go
 app, err := collage.New(&collage.Config{
@@ -207,9 +208,9 @@ development preview is the truth.**
 
 | | |
 | --- | --- |
-| Layout | `display` (`flex`, `none`), `flex-direction`, `flex-wrap`, `justify-content`, `align-items`, `align-self`, `flex-grow`, `flex-shrink`, `flex-basis`, `gap`, `row-gap`, `column-gap` |
+| Layout | `display` (`flex`, `none`), `flex-direction`, `flex-wrap`, `justify-content`, `align-items`, `align-self`, `flex`, `flex-grow`, `flex-shrink`, `flex-basis`, `gap`, `row-gap`, `column-gap` |
 | Size | `width`, `height`, `min-width`, `min-height`, `max-width`, `max-height`, `padding`, `margin` (with `auto`) — always `border-box` |
-| Paint | `background` (colour, `linear-gradient()`, `url()` with `background-size: cover \| contain`), `color`, `border` (`solid`), `border-radius`, `opacity`, `overflow: hidden` |
+| Paint | `background`, `background-color`, `background-image` (colour, `linear-gradient()`, `url()` with `background-size: cover \| contain`), `color`, `border` (`solid`), `border-radius`, `opacity`, `overflow: hidden` |
 | Text | `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `letter-spacing`, `text-align`, `text-transform`, `white-space`, `-webkit-line-clamp`, `text-overflow` |
 | Images | `object-fit` (`cover`, `contain`, `fill`) |
 

@@ -5,6 +5,8 @@
 // does not offer every plugin.
 module github.com/Elagoht/collage-ogimage
 
-go 1.26
+go 1.26.0
 
 require github.com/Elagoht/collage v0.40.0
+
+require golang.org/x/net v0.59.0

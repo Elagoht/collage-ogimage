@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **design, v0.1 in development.** This document is the specification the
+Status: **v0.1 in development — phase 1 of 6 done** (§12.3). This document is the specification the
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 
@@ -325,10 +325,11 @@ A flex container lays its children out on its main axis. `display` is `flex`,
 | Property | Values |
 | --- | --- |
 | `flex-direction` | `row` (default), `column` |
-| `justify-content` | `flex-start`, `flex-end`, `center`, `space-between`, `space-around`, `space-evenly` |
-| `align-items`, `align-self` | `flex-start`, `flex-end`, `center`, `stretch` |
+| `justify-content` | `flex-start`, `flex-end`, `center`, `space-between`, `space-around`, `space-evenly`; `start` and `end` as their synonyms |
+| `align-items`, `align-self` | `flex-start`, `flex-end`, `center`, `stretch`, (`start`, `end`); `align-self` also `auto` |
 | `flex-grow`, `flex-shrink` | numbers |
 | `flex-basis` | length, `auto` |
+| `flex` | `none`, `auto`, or a grow, an optional shrink and an optional basis — `flex: 1` is grow 1, shrink 1, basis 0, as in CSS |
 | `flex-wrap` | `nowrap` (default), `wrap` |
 | `gap`, `row-gap`, `column-gap` | length |
 | `width`, `height`, `min-*`, `max-*` | length, percentage, `auto` |
@@ -343,7 +344,7 @@ the algorithm has a choice the subset does not expose, it takes the CSS default.
 
 | Property | Values |
 | --- | --- |
-| `background`, `background-color` | a colour; `linear-gradient(angle, stops…)`; `url(...)` with `background-size: cover \| contain` |
+| `background`, `background-color`, `background-image` | a colour; `linear-gradient(angle \| to side \| to corner, stops…)`; `url(...)` with `background-size: cover \| contain`; a colour beneath a gradient or an image |
 | `color` | a colour |
 | `border`, `border-width`, `border-color`, `border-style` | `solid` only |
 | `border-radius` | length, percentage; four corners |
@@ -363,7 +364,7 @@ Colours are `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()`
 | `font-style` | `normal`, `italic` |
 | `line-height` | number, length |
 | `letter-spacing` | length |
-| `text-align` | `left`, `center`, `right` |
+| `text-align` | `left`, `center`, `right` (`start`, `end`) |
 | `text-transform` | `none`, `uppercase`, `lowercase` (Unicode-aware: `i` → `İ` in a `tr` card) |
 | `white-space` | `normal`, `nowrap`, `pre-wrap` |
 | `-webkit-line-clamp` | a number of lines, ellipsis after the last — in the clamp idiom below |
@@ -597,7 +598,7 @@ The hardest part and the one most worth being exact about:
 
 | Phase | Delivers | Done when |
 | --- | --- | --- |
-| 1 | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses; every unsupported input, and every element breaking §6.1's two kinds, names its line and column |
+| 1 ✓ | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses; every unsupported input, and every element breaking §6.1's two kinds, names its line and column |
 | 2 | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
 | 3 | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
 | 4 | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |

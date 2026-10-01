@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **v0.1 in development — phase 1 of 6 done** (§12.3). This document is the specification the
+Status: **v0.1 in development — phases 1 and 2 of 6 done** (§12.3). This document is the specification the
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 
@@ -336,9 +336,15 @@ A flex container lays its children out on its main axis. `display` is `flex`,
 | `padding`, `margin` (and `-top` etc.) | length; `margin: auto` centres |
 | `box-sizing` | `border-box` only, the default |
 
-Lengths are `px`, `%`, `em` and `rem` (`rem` against the root's font size). The
-layout follows the CSS Flexible Box Layout algorithm for these properties; where
-the algorithm has a choice the subset does not expose, it takes the CSS default.
+Lengths are `px`, `%`, `em` and `rem` (`rem` against the root's font size). Every
+number is within ±1 000 000: a card is 1200 pixels wide, and the bound keeps the
+arithmetic far from infinity. The layout follows the CSS Flexible Box Layout
+algorithm for these properties — flex base sizes, the automatic minimum size of
+a flex item, resolving flexible lengths with freezing, `align-content: normal`
+stretching the lines of a wrapped container — and where the algorithm has a
+choice the subset does not expose, it takes the CSS default. `space-around` and
+`space-evenly` with no room to spare fall back to the start, as CSS's "safe
+center" does.
 
 ### 6.3 Painting
 
@@ -599,14 +605,15 @@ The hardest part and the one most worth being exact about:
 | Phase | Delivers | Done when |
 | --- | --- | --- |
 | 1 ✓ | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses; every unsupported input, and every element breaking §6.1's two kinds, names its line and column |
-| 2 | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
+| 2 ✓ | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
 | 3 | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
 | 4 | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |
 | 5 | plugin: `Set`, store, mount, head tags, default card, export, preview, command | an end-to-end site test: a post page's `og:image` URL serves its card, a restart serves it from `Dir`, an export writes it |
 | 6 | documentation, `collage.json`, release v0.1.0 | README complete; listed in collage's plugin CI matrix |
 
 Fixtures for phases 2 and 3 are HTML files and a JSON file per fixture, recorded
-once from headless Chrome with §6.6's stylesheet injected: every element's
+once from headless Chrome by `go run ./tools/record-fixtures DIR`, with §6.6's
+stylesheet injected: every element's
 `getBoundingClientRect()`, and for text blocks each line's first and last
 character. Chrome draws text with Skia and hinting, the renderer with
 `x/image/vector`, so pixels are never compared across them — boxes and line breaks

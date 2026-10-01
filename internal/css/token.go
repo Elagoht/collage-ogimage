@@ -2,10 +2,16 @@ package css
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
+
+// MaxNumber bounds every number a value may hold. A card is 1200 pixels wide;
+// a million is room for anything meant, and keeps arithmetic on lengths far
+// from infinity.
+const MaxNumber = 1e6
 
 // kind is what a token is.
 type kind uint8
@@ -77,6 +83,9 @@ func tokenize(s string) ([]token, error) {
 			n, err := strconv.ParseFloat(s[i:j], 64)
 			if err != nil {
 				return nil, fmt.Errorf("%q is not a number", s[i:j])
+			}
+			if math.Abs(n) > MaxNumber {
+				return nil, fmt.Errorf("%s is larger than a card can use: keep numbers within ±%g", s[i:j], float64(MaxNumber))
 			}
 			k := j
 			for k < len(s) && (isLetter(s[k]) || s[k] == '%') {

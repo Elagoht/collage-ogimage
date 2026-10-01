@@ -271,6 +271,19 @@ func (m *Measurer) lay(src []unit, s *layout.Style, width, scale float64, align 
 	}
 
 	p := &Paragraph{Scale: scale}
+	// text-overflow: ellipsis on a line that does not wrap: cut where the box
+	// ends, which only the final width — the painter's — knows.
+	if align && s.Ellipsis && !wrap && !math.IsInf(width, 1) {
+		for i, lu := range lines {
+			w := 0.0
+			for _, u := range lu {
+				w += u.advance
+			}
+			if w > width+0.01 {
+				lines[i] = m.ellipsize(lu, width)
+			}
+		}
+	}
 	if s.Clamp > 0 && len(lines) > s.Clamp {
 		lines = lines[:s.Clamp]
 		lines[len(lines)-1] = m.ellipsize(lines[len(lines)-1], width)

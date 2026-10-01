@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **v0.1 in development — phases 1 to 3 of 6 done** (§12.3). This document is the specification the
+Status: **v0.1 in development — phases 1 to 4 of 6 done** (§12.3). This document is the specification the
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 
@@ -407,7 +407,10 @@ character is in the template, at render when it came in the data.
 - a `data:` URL of a PNG, JPEG or WebP.
 
 `object-fit: cover | contain | fill` and `object-position: center` (other positions
-are v0.2). Formats are PNG, JPEG, GIF (first frame) and WebP.
+are v0.2). Formats are PNG, JPEG, GIF (first frame) and WebP. A `url()` background
+without `background-size` is drawn at its own size from the box's top-left corner,
+once — there is no repeat. An image that cannot be loaded is drawn as nothing,
+and logged.
 
 ### 6.6 The default stylesheet
 
@@ -615,7 +618,7 @@ The hardest part and the one most worth being exact about:
 | 1 ✓ | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses; every unsupported input, and every element breaking §6.1's two kinds, names its line and column |
 | 2 ✓ | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
 | 3 ✓ | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
-| 4 | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |
+| 4 ✓ | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |
 | 5 | plugin: `Set`, store, mount, head tags, default card, export, preview, command | an end-to-end site test: a post page's `og:image` URL serves its card, a restart serves it from `Dir`, an export writes it |
 | 6 | documentation, `collage.json`, release v0.1.0 | README complete; listed in collage's plugin CI matrix |
 

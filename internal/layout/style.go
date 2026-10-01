@@ -45,6 +45,13 @@ type length struct {
 
 var autoLength = length{auto: true}
 
+// N is the length's number: pixels, or a percentage when Percent.
+func (l length) N() float64 { return l.n }
+
+// Percent reports whether the length is a percentage, which the painter
+// resolves against the box — a border-radius of 50%, say.
+func (l length) Percent() bool { return l.percent }
+
 // resolve returns l in pixels against base, or NaN when l is auto or a
 // percentage of an indefinite base.
 func (l length) resolve(base float64) float64 {

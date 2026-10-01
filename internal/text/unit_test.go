@@ -119,3 +119,15 @@ func TestEmptyAndSpacesOnly(t *testing.T) {
 		t.Errorf("spaces only: %d lines, height %v", len(p.Lines), p.Height)
 	}
 }
+
+func TestNowrapEllipsisWhenDrawn(t *testing.T) {
+	m := measurer(t)
+	n, s := block(t, `<p style="font-size:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">one two three four five six seven eight</p>`)
+	if p := m.Layout(n, s, 150, false); strings.HasSuffix(p.Lines[0].Text, "…") {
+		t.Error("measuring cut the line")
+	}
+	p := m.Layout(n, s, 150, true)
+	if !strings.HasSuffix(p.Lines[0].Text, "…") || p.Lines[0].Width > 150 {
+		t.Errorf("drawn: %q %v", p.Lines[0].Text, p.Lines[0].Width)
+	}
+}

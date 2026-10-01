@@ -24,25 +24,33 @@ type renderer struct {
 	// Warn reports what is drawn but not as written: a font family that is not
 	// registered, an image that could not be loaded.
 	warn func(msg string)
+	// digest is a hash of every font's bytes, part of every card's hash.
+	digest []byte
 }
 
 func newRenderer(cfg Config) (*renderer, error) {
 	var faces []text.Face
+	var all [][]byte
 	for _, f := range cfg.Fonts {
 		data, err := fs.ReadFile(cfg.FontFiles, f.File)
 		if err != nil {
 			return nil, fmt.Errorf("ogimage: font %q: %w", f.Family, err)
 		}
 		faces = append(faces, text.Face{Family: f.Family, Weight: f.Weight, Italic: f.Style == "italic", Data: data})
+		all = append(all, data)
 	}
 	fonts, err := text.NewFonts(faces)
 	if err != nil {
 		return nil, fmt.Errorf("ogimage: %w", err)
 	}
+	for _, b := range text.Bundled {
+		all = append(all, b.Data)
+	}
 	return &renderer{
 		fonts:  fonts,
 		loader: &fetch.Loader{Files: cfg.Files, Origins: cfg.ImageOrigins},
 		warn:   func(string) {},
+		digest: fontsDigest(all),
 	}, nil
 }
 

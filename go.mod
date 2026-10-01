@@ -9,7 +9,10 @@ go 1.26.0
 
 require github.com/Elagoht/collage v0.40.0
 
-require golang.org/x/net v0.59.0
+require (
+	github.com/Elagoht/collage-meta v0.1.4
+	golang.org/x/net v0.59.0
+)
 
 require golang.org/x/sys v0.48.0 // indirect
 

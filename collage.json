@@ -1,0 +1,99 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Elagoht/collage-snippets-highlighter/main/schemas/collage-plugin-manifest.schema.json",
+  "name": "elagoht/ogimage",
+  "description": "A collage plugin that draws each page's share card — the image a link is shown with on X, LinkedIn, Slack and in messengers — from an HTML template, in pure Go, and serves it at a URL made from its content.",
+  "repository": "https://github.com/Elagoht/collage-ogimage",
+  "config": {
+    "type": "object",
+    "description": "A collage plugin that draws each page's share card — the image a link is shown with on X, LinkedIn, Slack and in messengers — from an HTML template, in pure Go, and serves it at a URL made from its content.",
+    "properties": {
+      "cardDir": {
+        "type": "string",
+        "description": "CardDir is the directory under Root that holds card templates. Every .html file in it is parsed at startup, and a name passed to Set is one of them: \"og/post.html\". Defaults to \"og\"."
+      },
+      "default": {
+        "type": "string",
+        "description": "Default is the card template for every page that sets no card of its own, drawn from the page's title and description. Empty: such a page gets no card."
+      },
+      "dir": {
+        "type": "string",
+        "description": "Dir is where cards and what they are made of are kept across restarts. Empty keeps them in memory only, which is wrong with a disk page cache: a page cached before a restart names a card the restarted process cannot draw."
+      },
+      "fonts": {
+        "type": "array",
+        "description": "Fonts are the fonts cards are drawn in, their files read from FontFiles. With none, cards are drawn in the bundled Go fonts.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "family": {
+              "type": "string",
+              "description": "Family is the name font-family refers to it by: \"Outfit\"."
+            },
+            "file": {
+              "type": "string",
+              "description": "File is the TrueType or OpenType file's path in Config.FontFiles."
+            },
+            "style": {
+              "type": "string",
+              "description": "Style is \"normal\" or \"italic\". Empty means \"normal\"."
+            },
+            "weight": {
+              "type": "integer",
+              "description": "Weight is 100 to 900. Zero means 400."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "imageOrigins": {
+        "type": "array",
+        "description": "ImageOrigins are the origins remote images may be fetched from, such as \"https://cms.example.com\". An image from any other origin is an error.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "maxBytes": {
+        "type": "integer",
+        "description": "MaxBytes caps the bytes of cards kept. Zero means DefaultMaxBytes; a negative value means unlimited."
+      },
+      "maxEntries": {
+        "type": "integer",
+        "description": "MaxEntries caps how many cards are kept. Zero means DefaultMaxEntries; a negative value means unlimited."
+      },
+      "prefix": {
+        "type": "string",
+        "description": "Prefix is the URL prefix cards are served under. Defaults to \"/_og/\"."
+      },
+      "renderTimeout": {
+        "description": "RenderTimeout is how long one card may take to draw, including fetching its images. Zero means DefaultRenderTimeout.",
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+$",
+            "examples": [
+              "30s",
+              "5m"
+            ]
+          },
+          {
+            "type": "integer",
+            "description": "nanoseconds"
+          }
+        ]
+      },
+      "root": {
+        "type": "string",
+        "description": "Root is the directory in Templates that template names are relative to. Defaults to \"templates\"."
+      },
+      "siteName": {
+        "type": "string",
+        "description": "SiteName is what a template reads as .Site.Name. Defaults to the host of the application's BaseURL."
+      },
+      "workers": {
+        "type": "integer",
+        "description": "Workers is how many cards are drawn at once. Zero means half the CPUs, at least one."
+      }
+    },
+    "additionalProperties": false
+  }
+}

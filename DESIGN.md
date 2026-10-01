@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **v0.1 in development — phases 1 to 4 of 6 done** (§12.3). This document is the specification the
+Status: **v0.1.0 — all six phases done** (§12.3).
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 
@@ -505,9 +505,9 @@ In development nothing is cached: every `GET /_og/<hash>.png` draws the card aga
 and templates are read from `Templates` on every `Set`, so an edited template shows
 up on the next page reload and the next image request — provided the application
 hands the plugin the directory on disk in development, as the collage scaffold does
-for its static files. An `embed.FS` is fixed at build time and never reloads. `/_og/preview/` (development only)
-lists the cards this process recorded, newest first, beside the page that recorded
-each, and reloads itself when a card template changes.
+for its static files. An `embed.FS` is fixed at build time and never reloads. `/_og-preview/` (development only, and
+outside `Prefix`, so it never shadows a card) lists the card each page carried on
+its last render, beside the page, and refreshes itself every few seconds.
 
 ## 9. Security
 
@@ -549,7 +549,7 @@ The plugin produces images on request, which costs CPU and memory. The model:
    application does not start.
 4. Loads and parses every font in `Config.Fonts`; a file that is missing or not a
    TrueType/OpenType font is an error.
-5. Mounts `Prefix` (default `/_og/`) and, in development, `Prefix + "preview/"`.
+5. Mounts `Prefix` (default `/_og/`) and, in development, serves `/_og-preview/`.
 6. Registers the `ogimage` command (§11).
 
 ## 11. Tooling
@@ -619,8 +619,8 @@ The hardest part and the one most worth being exact about:
 | 2 ✓ | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
 | 3 ✓ | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
 | 4 ✓ | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |
-| 5 | plugin: `Set`, store, mount, head tags, default card, export, preview, command | an end-to-end site test: a post page's `og:image` URL serves its card, a restart serves it from `Dir`, an export writes it |
-| 6 | documentation, `collage.json`, release v0.1.0 | README complete; listed in collage's plugin CI matrix |
+| 5 ✓ | plugin: `Set`, store, mount, head tags, default card, export, preview, command | an end-to-end site test: a post page's `og:image` URL serves its card, a restart serves it from `Dir`, an export writes it |
+| 6 ✓ | documentation, `collage.json`, release v0.1.0 | README complete; listed in collage's plugin CI matrix |
 
 Fixtures for phases 2 and 3 are HTML files and a JSON file per fixture, recorded
 once from headless Chrome by `go run ./tools/record-fixtures DIR`, with §6.6's

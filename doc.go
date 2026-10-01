@@ -24,6 +24,5 @@
 // of this site recorded it — a request cannot make the server draw a card it did
 // not decide on.
 //
-// The package is in development. README.md documents v0.1 as designed and
-// DESIGN.md is its specification; until v0.1.0 is released, Init refuses to start.
+// README.md is the guide; DESIGN.md the specification, and why it is as it is.
 package ogimage

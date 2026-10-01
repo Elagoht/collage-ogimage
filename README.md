@@ -4,11 +4,7 @@ A collage plugin that draws each page's share card — the image X, LinkedIn,
 Slack and messengers show for a link — from a template you write in HTML and CSS,
 in pure Go, and serves it at a URL made from its content.
 
-> **Status: in development — phases 1 to 4 of 6 done.** This README describes
-> v0.1 as designed; the specification is [DESIGN.md](DESIGN.md). The renderer is
-> complete — `ogimage.Draw(cfg, html)` draws a card — and the plugin around it is
-> next. Nothing is
-> released, and `Init` refuses to start until it is.
+How it works, and why, is [DESIGN.md](DESIGN.md).
 
 ```go
 app, err := collage.New(&collage.Config{
@@ -151,6 +147,8 @@ The layout places them with `{{hoist "head"}}`, as every hoisted tag.
 
 One shape for every card is what lets any card template serve as the default, and
 a page move from the default to a card of its own by naming a template.
+
+**Register ogimage after elagoht/meta** in `Config.Plugins`.
 
 **With elagoht/meta.** Both write `og:image`, under the same key, and the later
 declaration in a handler wins. Call `ogimage.Set` after `meta.Set` for the card to
@@ -310,9 +308,9 @@ output, and a card that fails to draw fails the build.
 
 ## Designing a card
 
-- **Preview.** In development, `/_og/preview/` lists the cards the running site
-  recorded, newest first, beside their pages, and reloads when a card template
-  changes. Open a page, then the preview.
+- **Preview.** In development, `/_og-preview/` lists the card each page carried
+  on its last render, beside the page, and refreshes itself every few seconds.
+  Open a page, then the preview; edit a card template and reload the page.
 - **Draw one without the site.** `go run . ogimage og/post.html card.json > card.png`
   draws a template with the `Card` in `card.json` (`{"title": "…", "label": "…"}`).
 - **Check in a browser.** Open the template's HTML in a browser with sample text in

@@ -1,7 +1,6 @@
 package ogimage
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -116,10 +115,7 @@ func TestNewWithCopies(t *testing.T) {
 	}
 }
 
-func TestInitRefusesUntilReleased(t *testing.T) {
-	if err := NewWith(valid()).Init(context.Background(), nil); !errors.Is(err, ErrNotReleased) {
-		t.Errorf("Init = %v, want ErrNotReleased", err)
-	}
+func TestName(t *testing.T) {
 	if New().Name() != "elagoht/ogimage" {
 		t.Error("name")
 	}

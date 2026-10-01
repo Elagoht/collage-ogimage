@@ -211,7 +211,9 @@ step out of the page's render.
 
 `Set` called twice in one render: the later call wins, as any hoist of the same key
 from the same fragment does in collage, and a deeper fragment's wins over its
-parent's. Only the winning card is recorded.
+parent's. Every call records its own card, keyed by its hash; which one is the
+page's is not decided by `Set` but by which `og:image` the render's head ends up
+with (§15.3).
 
 ### 5.3 The default card
 
@@ -246,8 +248,10 @@ With elagoht/meta, leave its `DefaultImage` unset: a default image is an `og:ima
 declared on every page, and the default card would never apply.
 
 `.Page.Locale` is the event's `Locale`. `.Page.Path` — the request's path, which
-the event does not carry — is stored by the plugin's `OnBeforeRender` where its
-`OnAfterRender` can read it (§15).
+the event does not carry — is put on the render by the plugin's `OnBeforeRender`
+with `rc.Set`, under a key of the plugin's own, and read back in `OnAfterRender`
+from `ev.Data`: `rc.Set` writes the render's shared data, and the event's `Data` is
+that map (§15.2).
 
 The rewritten HTML is what the page cache stores (collage caches the HTML the
 `AfterRender` hooks leave), so the default card is computed once per cached page,
@@ -633,22 +637,47 @@ PNGs are the renderer's own, reviewed by eye when they change.
 | two element kinds, `display:flex` required on containers | everything a flex box | a browser draws the same template the same way, and `<b>` mid-sentence is a run, not a box |
 | errors at startup | best-effort drawing | a card drawn wrong is shared before anyone sees it |
 
-## 15. Open questions, to settle in phase 5
+## 15. Questions settled against collage
 
-These rest on how collage behaves, and are checked against it before the plugin
-relies on them — each with what to do if the answer is no.
+Each of these rests on how collage behaves. They were checked in collage v0.40.0's
+source; phase 5 pins each with a test, so a collage release that changes the
+behaviour fails this plugin's tests rather than its users' cards.
 
-1. **`OnBeforeRender` order at depth zero.** §5.3 has the plugin's
-   `twitter:card=summary_large_image` win over elagoht/meta's `summary` because it
-   is declared later, by a plugin registered later. If plugin order does not decide
-   which depth-zero declaration wins, the fallback is an option on elagoht/meta to
-   leave `twitter:card` to another plugin.
-2. **The request path in `OnAfterRender`.** `AfterRenderEvent` carries the page and
-   locale but not the path a parameterised page was reached at. The plan is to
-   store it from `OnBeforeRender` in the render's shared data under a key private
-   to the plugin, which `AfterRenderEvent.Data` exposes. If that proves fragile,
-   `AfterRenderEvent.Path` is a small change to collage's core.
-3. **Concurrent fragments.** `Set` from sibling fragments' handlers runs
-   concurrently. Recording must be safe for that, and "the card that won" must be
-   the one whose hoisted `og:image` won — decided after the render, from the
-   declarations, not from the order `Set` calls arrived in.
+### 15.1 Which depth-zero declaration wins
+
+§5.3 has the plugin's `twitter:card=summary_large_image` win over elagoht/meta's
+`summary`, both declared in `OnBeforeRender`. It holds, for two reasons in
+collage's code:
+
+- `Registry.BeforeRender` calls the plugins' hooks one after another, in
+  registration order.
+- Both hooks hoist through the render's root context, at depth 0 and launch order
+  0, and `Hoisted.Add` replaces a key on `depth == previous.depth && order >=
+  previous.order` — at equal position, the later declaration wins.
+
+So ogimage registered after meta wins. The README tells the application to
+register it after meta; a test builds both, in that order, and asserts the head.
+
+### 15.2 The request path in `OnAfterRender`
+
+`AfterRenderEvent` carries the page and locale but not the path. The plugin does
+not need a change to collage's core for it: `rc.Set(key, v)` writes the render's
+`SharedData`, and `AfterRenderEvent.Data` is that same map. So `OnBeforeRender`
+puts one value of the plugin's own on the render — the request's path and locale,
+and the cards recorded so far — with `rc.Set` under a key prefixed with the
+plugin's name, and `OnAfterRender` reads it from `ev.Data`. It is the mechanism
+elagoht/meta already uses for its site, and works on collage v0.40.0.
+
+### 15.3 `Set` from fragments rendered concurrently
+
+Sibling fragments' data handlers run concurrently, so two `Set` calls can arrive
+in either order. Nothing depends on that order:
+
+- **Recording never races.** Each call records its card in the store under its own
+  hash, with the store's lock; two calls never overwrite each other. A card that
+  loses is a spec nobody's head points at — bounded like every other.
+- **The page's card is the head's.** Which `og:image` a page carries is decided by
+  collage's hoist rules — depth, then launch order — which are deterministic and
+  do not depend on which goroutine finished first. `OnAfterRender` reads the
+  winning `og:image` from the rendered head and takes its hash as the page's card,
+  for `Recorded` and for the export.

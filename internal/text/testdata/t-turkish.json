@@ -1,0 +1,21 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600
+  },
+  {
+    "tag": "p",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 72,
+    "lines": [
+      "Günaydın, şöyle bir öğrenci",
+      "ılık çayını içti ve İstanbul’a",
+      "gitti"
+    ]
+  }
+]

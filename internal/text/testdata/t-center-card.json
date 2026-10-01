@@ -1,0 +1,40 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 1200,
+    "h": 630
+  },
+  {
+    "tag": "span",
+    "x": 96,
+    "y": 156.609375,
+    "w": 1008,
+    "h": 38.390625,
+    "lines": [
+      "example.com"
+    ]
+  },
+  {
+    "tag": "h1",
+    "x": 96,
+    "y": 219,
+    "w": 1008,
+    "h": 192,
+    "lines": [
+      "About me and the things I",
+      "build for the web"
+    ]
+  },
+  {
+    "tag": "p",
+    "x": 96,
+    "y": 435,
+    "w": 1008,
+    "h": 38.390625,
+    "lines": [
+      "Who I am \u0026 what I build, in a sentence long enough to wrap."
+    ]
+  }
+]

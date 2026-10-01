@@ -26,30 +26,67 @@ import (
 	"strings"
 
 	"github.com/Elagoht/collage-ogimage/internal/layout"
+	"github.com/Elagoht/collage-ogimage/internal/text"
 )
 
-// Rect is one element's border box, as getBoundingClientRect reports it.
+// Rect is one element's border box, as getBoundingClientRect reports it, and —
+// for an element holding text — the text of each line Chrome broke it into.
 type Rect struct {
-	Tag string  `json:"tag"`
-	X   float64 `json:"x"`
-	Y   float64 `json:"y"`
-	W   float64 `json:"w"`
-	H   float64 `json:"h"`
+	Tag   string   `json:"tag"`
+	X     float64  `json:"x"`
+	Y     float64  `json:"y"`
+	W     float64  `json:"w"`
+	H     float64  `json:"h"`
+	Lines []string `json:"lines,omitempty"`
 }
 
+// page wraps a card with the stylesheet, the bundled fonts as @font-face, and a
+// script that reports, once the fonts have loaded, every element's box and the
+// lines of every element holding text. A character starts a new line when its
+// top is at or below the bottom of the line so far.
 const page = `<!doctype html>
-<html><head><meta charset="utf-8"><style>%s</style></head>
+<html><head><meta charset="utf-8"><style>%s
+%s</style></head>
 <body>%s
 <script>
-const root = document.body.firstElementChild;
-const out = [root, ...root.querySelectorAll("*")].map(e => {
-  const r = e.getBoundingClientRect();
-  return {tag: e.tagName.toLowerCase(), x: r.x, y: r.y, w: r.width, h: r.height};
+function lines(e) {
+  const walk = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+  const out = [];
+  let cur = null, bottom = -1e9, n;
+  while ((n = walk.nextNode())) {
+    for (let i = 0; i < n.length; i++) {
+      const range = document.createRange();
+      range.setStart(n, i); range.setEnd(n, i + 1);
+      const rects = range.getClientRects();
+      if (!rects.length) continue;
+      const r = rects[0];
+      if (cur === null || r.top >= bottom - 0.5) {
+        cur = {t: ""}; out.push(cur); bottom = r.bottom;
+      } else {
+        bottom = Math.max(bottom, r.bottom);
+      }
+      cur.t += n.data[i];
+    }
+  }
+  return out.map(l => l.t.replace(/\s+/g, " ").trim()).filter(t => t !== "");
+}
+function holdsText(e) {
+  return [...e.childNodes].some(c => c.nodeType === 3 && c.data.trim() !== "") &&
+    getComputedStyle(e).display !== "flex";
+}
+document.fonts.ready.then(() => {
+  const root = document.body.firstElementChild;
+  const out = [root, ...root.querySelectorAll("*")].map(e => {
+    const r = e.getBoundingClientRect();
+    const o = {tag: e.tagName.toLowerCase(), x: r.x, y: r.y, w: r.width, h: r.height};
+    if (holdsText(e) && !e.parentElement.closest("p,h1,h2,h3,h4,h5,h6,span,strong,b,em,i,small") ) o.lines = lines(e);
+    return o;
+  });
+  const pre = document.createElement("pre");
+  pre.id = "rects";
+  pre.textContent = JSON.stringify(out);
+  document.body.appendChild(pre);
 });
-const pre = document.createElement("pre");
-pre.id = "rects";
-pre.textContent = JSON.stringify(out);
-document.body.appendChild(pre);
 </script></body></html>`
 
 var rects = regexp.MustCompile(`(?s)<pre id="rects">(.*?)</pre>`)
@@ -72,6 +109,7 @@ func main() {
 		fail(err)
 	}
 	defer os.RemoveAll(tmp)
+	fonts := fontFaces(tmp)
 
 	for _, fixture := range fixtures {
 		card, err := os.ReadFile(fixture)
@@ -79,11 +117,11 @@ func main() {
 			fail(err)
 		}
 		wrapped := filepath.Join(tmp, filepath.Base(fixture))
-		if err := os.WriteFile(wrapped, fmt.Appendf(nil, page, layout.Stylesheet, strings.TrimSpace(string(card))), 0o600); err != nil {
+		if err := os.WriteFile(wrapped, fmt.Appendf(nil, page, layout.Stylesheet, fonts, strings.TrimSpace(string(card))), 0o600); err != nil {
 			fail(err)
 		}
 		dom, err := exec.Command(*chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
-			"--window-size=4000,4000", "--dump-dom", "file://"+wrapped).Output()
+			"--window-size=4000,4000", "--virtual-time-budget=10000", "--dump-dom", "file://"+wrapped).Output()
 		if err != nil {
 			fail(fmt.Errorf("%s: chrome: %w", fixture, err))
 		}
@@ -105,6 +143,25 @@ func main() {
 		}
 		fmt.Printf("%s: %d boxes\n", target, len(boxes))
 	}
+}
+
+// fontFaces writes the bundled fonts into dir and returns @font-face rules for
+// them, so Chrome draws a fixture's text in the very files the renderer does.
+func fontFaces(dir string) string {
+	var css strings.Builder
+	for i, f := range text.Bundled {
+		path := filepath.Join(dir, fmt.Sprintf("font%d.ttf", i))
+		if err := os.WriteFile(path, f.Data, 0o600); err != nil {
+			fail(err)
+		}
+		style := "normal"
+		if f.Italic {
+			style = "italic"
+		}
+		fmt.Fprintf(&css, "@font-face { font-family: %q; font-weight: %d; font-style: %s; font-display: block; src: url(%q); }\n",
+			f.Family, f.Weight, style, "file://"+path)
+	}
+	return css.String()
 }
 
 func defaultChrome() string {

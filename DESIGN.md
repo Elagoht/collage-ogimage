@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **v0.1 in development — phases 1 and 2 of 6 done** (§12.3). This document is the specification the
+Status: **v0.1 in development — phases 1 to 3 of 6 done** (§12.3). This document is the specification the
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 
@@ -589,8 +589,16 @@ Nothing else.
 
 The hardest part and the one most worth being exact about:
 
-- Glyph outlines and advances come from `sfnt`; kerning from the font's `kern`
-  table, `GPOS` pair adjustment in v0.2.
+- Glyph outlines and advances come from `sfnt`, unhinted; kerning from the font's
+  `kern` table, `GPOS` pair adjustment in v0.2.
+- White space follows `white-space`: under `normal` and `nowrap`, tabs and
+  newlines are spaces and a run of spaces is one, across runs, with none at a
+  paragraph's start or end or before a `<br>`; under `pre-wrap`, spaces are kept,
+  a tab is eight, and a newline breaks the line.
+- A line's height is CSS's inline box model: each run reaches its primary font's
+  ascent above the baseline and its descent below, each grown by half its line
+  height's leading, and the line spans the furthest of them and the block's own
+  strut.
 - Line breaking is greedy over UAX #14 break opportunities, measured with the
   font's advances at the computed size and letter spacing.
 - A run that mixes fonts (fallback for a missing glyph) is split into segments,
@@ -606,14 +614,15 @@ The hardest part and the one most worth being exact about:
 | --- | --- | --- |
 | 1 ✓ | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses; every unsupported input, and every element breaking §6.1's two kinds, names its line and column |
 | 2 ✓ | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
-| 3 | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
+| 3 ✓ | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
 | 4 | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |
 | 5 | plugin: `Set`, store, mount, head tags, default card, export, preview, command | an end-to-end site test: a post page's `og:image` URL serves its card, a restart serves it from `Dir`, an export writes it |
 | 6 | documentation, `collage.json`, release v0.1.0 | README complete; listed in collage's plugin CI matrix |
 
 Fixtures for phases 2 and 3 are HTML files and a JSON file per fixture, recorded
 once from headless Chrome by `go run ./tools/record-fixtures DIR`, with §6.6's
-stylesheet injected: every element's
+stylesheet injected and the bundled Go fonts given to Chrome as `@font-face`, so
+both draw from the same font files: every element's
 `getBoundingClientRect()`, and for text blocks each line's first and last
 character. Chrome draws text with Skia and hinting, the renderer with
 `x/image/vector`, so pixels are never compared across them — boxes and line breaks

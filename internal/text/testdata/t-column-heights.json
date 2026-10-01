@@ -1,0 +1,48 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600
+  },
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 400,
+    "h": 141.5625
+  },
+  {
+    "tag": "h1",
+    "x": 0,
+    "y": 0,
+    "w": 400,
+    "h": 76.78125,
+    "lines": [
+      "Title text that wraps over",
+      "two lines here"
+    ]
+  },
+  {
+    "tag": "p",
+    "x": 0,
+    "y": 82.78125,
+    "w": 400,
+    "h": 33.59375,
+    "lines": [
+      "Building a framework one fragment at a time, with caching that",
+      "follows each page and cards that draw themselves"
+    ]
+  },
+  {
+    "tag": "span",
+    "x": 0,
+    "y": 122.375,
+    "w": 400,
+    "h": 19.1875,
+    "lines": [
+      "a span block"
+    ]
+  }
+]

@@ -4,10 +4,10 @@ A collage plugin that draws each page's share card — the image X, LinkedIn,
 Slack and messengers show for a link — from a template you write in HTML and CSS,
 in pure Go, and serves it at a URL made from its content.
 
-> **Status: in development — phases 1 and 2 of 6 done.** This README describes
+> **Status: in development — phases 1 to 3 of 6 done.** This README describes
 > v0.1 as designed; the specification is [DESIGN.md](DESIGN.md). The template
-> parser and validator, and the flexbox layout, exist and are tested against
-> Chrome; text and drawing do not yet. Nothing is
+> parser and validator, the flexbox layout and the text engine exist and are
+> tested against Chrome; drawing does not yet. Nothing is
 > released, and `Init` refuses to start until it is.
 
 ```go

@@ -98,7 +98,7 @@ func (l *layouter) measureHeight(b *Box, w, cbW, cbH float64) float64 {
 // build makes the box tree, computing each element's style. Hidden elements
 // have no box; text directly inside a flex container is an anonymous box.
 func (l *layouter) build(n *dom.Node, parent *Style, rootFont float64) *Box {
-	s := compute(n, parent, rootFont)
+	s := Compute(n, parent, rootFont)
 	if rootFont == 0 {
 		rootFont = s.FontSize
 	}

@@ -1,0 +1,22 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600
+  },
+  {
+    "tag": "p",
+    "x": 0,
+    "y": 0,
+    "w": 150,
+    "h": 86.375,
+    "lines": [
+      "server-side",
+      "component-based",
+      "rendering",
+      "framework"
+    ]
+  }
+]

@@ -1,0 +1,21 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600
+  },
+  {
+    "tag": "p",
+    "x": 0,
+    "y": 0,
+    "w": 400,
+    "h": 92,
+    "lines": [
+      "Building a framework one fragment at a",
+      "time, with caching that follows each page",
+      "and cards that draw themselves"
+    ]
+  }
+]

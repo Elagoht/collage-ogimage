@@ -97,6 +97,10 @@ type Style struct {
 	WhiteSpace    string
 	Color         css.Color
 
+	// RootFont is the root element's font size, what rem is measured against:
+	// carried so a run's style can be computed from its block's.
+	RootFont float64
+
 	// Painting and text, not inherited.
 	Background   css.Background
 	BorderColor  css.Color
@@ -123,15 +127,16 @@ func rootStyle() *Style {
 	}
 }
 
-// compute is n's style, inheriting from parent; rootFont is the root element's
-// computed font size, for rem — zero while computing the root itself.
-func compute(n *dom.Node, parent *Style, rootFont float64) *Style {
+// Compute is n's style, inheriting from parent; rootFont is the root element's
+// computed font size, for rem — zero while computing the root itself. It is how
+// the text package styles the runs inside a text block, which have no box.
+func Compute(n *dom.Node, parent *Style, rootFont float64) *Style {
 	s := &Style{
 		// Inherited.
 		FontSize: parent.FontSize, LineHeight: parent.LineHeight, LineHeightPx: parent.LineHeightPx,
 		FontFamily: parent.FontFamily, FontWeight: parent.FontWeight, Italic: parent.Italic,
 		LetterSpacing: parent.LetterSpacing, TextAlign: parent.TextAlign, Transform: parent.Transform,
-		WhiteSpace: parent.WhiteSpace, Color: parent.Color,
+		WhiteSpace: parent.WhiteSpace, Color: parent.Color, RootFont: parent.RootFont,
 		// Initial values of the rest.
 		Justify: "flex-start", AlignItems: "stretch", AlignSelf: "auto",
 		Shrink: 1, Basis: autoLength,
@@ -182,6 +187,7 @@ func compute(n *dom.Node, parent *Style, rootFont float64) *Style {
 	if rootFont == 0 {
 		rootFont = s.FontSize
 	}
+	s.RootFont = rootFont
 
 	px := func(l css.Length) length {
 		switch l.Unit {

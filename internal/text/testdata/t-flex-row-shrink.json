@@ -1,0 +1,42 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600
+  },
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 500,
+    "h": 76.75
+  },
+  {
+    "tag": "p",
+    "x": 0,
+    "y": 0,
+    "w": 245,
+    "h": 76.75,
+    "lines": [
+      "Building a framework one",
+      "fragment at a time, with caching",
+      "that follows each page and cards",
+      "that draw themselves"
+    ]
+  },
+  {
+    "tag": "p",
+    "x": 255,
+    "y": 0,
+    "w": 245,
+    "h": 76.75,
+    "lines": [
+      "Building a framework one",
+      "fragment at a time, with caching",
+      "that follows each page and cards",
+      "that draw themselves"
+    ]
+  }
+]

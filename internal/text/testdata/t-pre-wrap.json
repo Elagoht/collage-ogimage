@@ -1,0 +1,20 @@
+[
+  {
+    "tag": "div",
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600
+  },
+  {
+    "tag": "p",
+    "x": 0,
+    "y": 0,
+    "w": 600,
+    "h": 38.375,
+    "lines": [
+      "keep these spaces",
+      "and this newline"
+    ]
+  }
+]

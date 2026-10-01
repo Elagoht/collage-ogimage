@@ -68,7 +68,8 @@ image, 1200×630 unless it says otherwise:
   </div>
 
   <h1 data-fit style="font-size:72px; font-weight:800; line-height:1.1;
-                      -webkit-line-clamp:3">{{.Title}}</h1>
+                      display:-webkit-box; -webkit-box-orient:vertical;
+                      -webkit-line-clamp:3; overflow:hidden">{{.Title}}</h1>
 
   <div style="display:flex; gap:24px; font-size:28px; color:#94a3b8">
     <span>{{.Label}}</span>
@@ -79,7 +80,9 @@ image, 1200×630 unless it says otherwise:
 
 It is `html/template`: values are escaped, `{{if}}` and `{{range}}` work, and in
 development the file is read from disk on every use, so an edit shows on the next
-reload. Styles are inline: there is no stylesheet. The CSS is a subset — see
+reload — when the application hands the plugin the template directory on disk in
+development, as the scaffold does for its static files; an `embed.FS` never
+changes. Styles are inline: there is no stylesheet. The CSS is a subset — see
 [What HTML and CSS work](#what-html-and-css-work) — and a property outside it stops
 the application at startup with the template, line and property named, rather than
 drawing a card wrong.
@@ -103,17 +106,24 @@ func postData(ctx context.Context, rc *collage.RenderContext) (postView, []strin
 	if err != nil {
 		return postView{}, nil, err
 	}
-	ogimage.Set(rc, "og/post.html", ogimage.Card{
+	if err := ogimage.Set(rc, "og/post.html", ogimage.Card{
 		Title:  post.Title,
 		Label:  post.Category,
 		Image:  post.CoverURL,
 		Fields: map[string]string{"date": post.Published.Format("2 January 2006")},
-	})
+	}); err != nil {
+		return postView{}, nil, err
+	}
 	return postView{Post: post}, []string{"post:" + post.Slug}, nil
 }
 ```
 
-That is all. The head gets:
+`Set` returns an error — an unknown template, or a value the renderer cannot draw
+— so a broken card fails where it was asked for, like any failure of the handler.
+A handler that would rather serve the page without its card logs it and carries
+on. Without the plugin registered (a test), `Set` does nothing.
+
+The head gets:
 
 ```html
 <meta property="og:image" content="https://example.com/_og/3f9a0be2…c1.png">
@@ -142,8 +152,9 @@ a page move from the default to a card of its own by naming a template.
 
 **With elagoht/meta.** Both write `og:image`, under the same key, and the later
 declaration in a handler wins. Call `ogimage.Set` after `meta.Set` for the card to
-be the image, before it for meta's `Image` to be. Leave meta's `DefaultImage`
-unset; see [the default card](#the-default-card).
+be the image, before it for meta's `Image` to be. Register ogimage **after** meta in
+`Config.Plugins`, and leave meta's `DefaultImage` unset; see
+[the default card](#the-default-card).
 
 ## The default card
 
@@ -156,27 +167,43 @@ gets one, drawn from its `<title>` as `.Title` and its meta description as
 <div style="display:flex; flex-direction:column; justify-content:center; gap:24px;
             width:1200px; height:630px; padding:96px; background:#ffffff; color:#0f172a">
   <span style="font-size:32px; color:#64748b">{{.Site.Host}}</span>
-  <h1 data-fit style="font-size:80px; font-weight:800; -webkit-line-clamp:2">{{.Title}}</h1>
-  <p style="font-size:32px; color:#475569; -webkit-line-clamp:2">{{.Description}}</p>
+  <h1 data-fit style="font-size:80px; font-weight:800; display:-webkit-box;
+                      -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden">{{.Title}}</h1>
+  <p style="font-size:32px; color:#475569">{{.Description}}</p>
 </div>
 ```
 
-A page whose head already has an `og:image` — a cover set through elagoht/meta —
-keeps it. The default card is decided once per render, like the page, so a cached
-page is not drawn again.
+A page whose render declared an `og:image` — its own card, or a cover set through
+elagoht/meta — keeps it. The default card is added after the render, into the head
+the layout marked with `{{hoist "head"}}`, and the page cache stores the result, so
+a cached page is not drawn again.
+
+With elagoht/meta, two things: leave its `DefaultImage` unset, since a default image
+is an `og:image` on every page and the default card would never apply; and register
+ogimage after meta, so that its `twitter:card=summary_large_image` replaces meta's
+`summary`.
 
 ## What HTML and CSS work
 
-The renderer draws a fixed subset, with the meaning CSS gives it. A card inside the
-subset looks the same in a browser, which is how to check one by eye and what will
-let a browser-backed renderer take the same templates later.
+The renderer draws a fixed subset, with the meaning CSS gives it, over a default
+stylesheet that sets every margin to 0 and every box to `border-box` (it is in
+[DESIGN.md §6.6](DESIGN.md#66-the-default-stylesheet); paste it into a page to
+sketch a card in a browser). Inside the subset a card looks close to the same in a
+browser — but not pixel for pixel, and `data-fit` is the renderer's alone. **The
+development preview is the truth.**
 
 **Elements:** `div`, `section`, `header`, `footer`, `main`, `article`, `span`, `p`,
 `h1`–`h6`, `strong`, `b`, `em`, `i`, `small`, `img`, `br`. Attributes: `style`,
 `src`, `alt`, `data-fit`, and `class`, which is accepted and ignored.
 
-**Every box is a flex container.** There is no block or inline flow; a box lays its
-children out along its main axis.
+**Every element is one of two kinds:**
+
+- **a flex container**, which says `display:flex`, and lays its children out as
+  boxes — there is no block flow and no float, so an element holding a `div`, an
+  `img` or a heading and not saying `display:flex` is an error at startup;
+- **a text block**, which says no `display` and holds only text and `span`,
+  `strong`, `b`, `em`, `i`, `small`, `br` — a paragraph, wrapped across its runs,
+  so `a <b>modular</b> monolith` is one sentence with a bold word.
 
 | | |
 | --- | --- |
@@ -198,9 +225,13 @@ and every element and property not listed above.
 Text wraps at spaces and after hyphens. Three things a card needs and a page
 rarely does:
 
-- **`-webkit-line-clamp: 3`** stops after three lines and ends the last with `…`.
+- **Clamping** stops after N lines and ends the last with `…`. Write it the way a
+  browser needs it, all four together:
+  `display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden`.
+  `-webkit-line-clamp` alone would be ignored by a browser, so it is an error.
 - **`data-fit`** shrinks the font, 2px at a time down to half its size, until the
-  text fits its box and its clamp — for a title that may be four words or forty.
+  text fits its box and its clamp — for a title that may be four words or forty. A
+  browser ignores the attribute and shows the declared size.
 - **`text-transform: uppercase`** is Unicode-aware, and knows Turkish: `i` becomes
   `İ` in a card for a `tr` page.
 
@@ -294,11 +325,13 @@ img, err := ogimage.Draw(cfg, `<div style="width:1200px;height:630px;background:
 draws card HTML directly, for golden-image tests, and
 
 ```go
-card, ok := ogimage.Recorded(app, "/blogs/hello-world")
+og := ogimage.NewWith(cfg)        // the plugin the test's application is built with
+// ... request /blogs/hello-world
+card, ok := og.Recorded("/blogs/hello-world")
 ```
 
-returns the card a page recorded on its last render — its template, its `Card`
-and its URL — for a test that a page sets the card it should.
+returns the card a page recorded on its last render — its template, its `Card`,
+its HTML and its URL — for a test that a page sets the card it should.
 
 ## Security
 

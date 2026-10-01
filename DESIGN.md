@@ -69,7 +69,8 @@ PNG in pure Go, and cached by the same rules as the page it belongs to.
   </div>
 
   <h1 data-fit style="font-size:72px; font-weight:800; line-height:1.1;
-                      -webkit-line-clamp:3">{{.Title}}</h1>
+                      display:-webkit-box; -webkit-box-orient:vertical;
+                      -webkit-line-clamp:3; overflow:hidden">{{.Title}}</h1>
 
   <div style="display:flex; gap:24px; font-size:28px; color:#94a3b8">
     <span>{{.Label}}</span>
@@ -81,6 +82,10 @@ PNG in pure Go, and cached by the same rules as the page it belongs to.
 The root element's `width` and `height` are the image's size. 1200×630 is what
 every network expects, and what a root that sets neither gets.
 
+Two rules shape every template (§6.1): an element holding other boxes says
+`display:flex`, and an element holding only text — with `<b>` or `<span>` inside
+it — is a paragraph. Both mean what they mean in a browser.
+
 ### 3.2 The page
 
 ```go
@@ -89,15 +94,22 @@ func (b *Blog) postData(ctx context.Context, rc *collage.RenderContext) (postVie
 	if err != nil {
 		return postView{}, nil, err
 	}
-	ogimage.Set(rc, "og/post.html", ogimage.Card{
+	if err := ogimage.Set(rc, "og/post.html", ogimage.Card{
 		Title:  post.Title,
 		Label:  post.Category.Name,
 		Image:  b.Client.Asset(post.CoverImage),
 		Fields: map[string]string{"date": post.PublishedAt.Format("2 January 2006")},
-	})
+	}); err != nil {
+		return postView{}, nil, err
+	}
 	return view, tags, nil
 }
 ```
+
+`Set` returns an error so that a card that cannot be built fails where it was
+asked for, as any other failure of the handler does — on the development error
+panel, and in production as the fragment's failure. A handler that would rather
+serve the page without its card logs the error and carries on.
 
 ### 3.3 The application
 
@@ -182,16 +194,20 @@ step out of the page's render.
 
 `Set(rc, template, card)`:
 
-1. Looks `template` up among the card templates parsed at startup. An unknown name
-   is an error, reported the way a template error inside a data handler is: in
-   development on the page's error panel; in production logged, and the page keeps
-   whatever `og:image` it had.
-2. Executes it with `cardData`. Every value is escaped by `html/template`, as on a
+1. Finds the plugin's state where elagoht/meta finds its own: on the render
+   context, put there by the plugin's `OnBeforeRender` with `rc.Set` and read with
+   `collage.Get`. It is carried by the render, not by `context.Context`, so a
+   shared render — whose context values collage strips (v0.39.0) — still has it.
+   With no plugin registered (a test), `Set` does nothing and returns nil.
+2. Looks `template` up among the card templates parsed at startup. An unknown name
+   is `ErrUnknownTemplate`, returned.
+3. Executes it with `cardData`. Every value is escaped by `html/template`, as on a
    page.
-3. Parses the HTML into the box tree (§6) and validates every element, attribute
+4. Parses the HTML into the box tree (§6) and validates every element, attribute
    and style property. Static parts of each template were already validated at
    startup (§10); this catches values that arrived in the data, such as a colour.
-4. Computes the hash (§7), records the spec, and hoists the tags (§5.4).
+   A failure is `ErrUnsupported`, returned, with the template and the property.
+5. Computes the hash (§7), records the spec, and hoists the tags (§5.4).
 
 `Set` called twice in one render: the later call wins, as any hoist of the same key
 from the same fragment does in collage, and a deeper fragment's wins over its
@@ -205,16 +221,37 @@ A page that calls `Set` nowhere gets `Config.Default`, when it is set, drawn fro
 - `Description`: its `<meta name="description">`;
 - `Label`, `Image`, `Fields`: empty.
 
-These exist only once the page has rendered, so the default card is applied in
-`OnAfterRender`: the plugin reads the title and description from the head of the
-rendered HTML, renders the default template with them, and writes the `og:image`
-tags into the head — **unless the head already carries an `og:image`**. A page with
-a cover of its own (`meta.Set(rc, meta.Page{Image: ...})`) keeps it; a page with no
-image gets a card. With elagoht/meta, leave its `DefaultImage` unset: a default
-image there is an `og:image` on every page, and the default card would never apply.
+These exist only once the page has rendered, so the default card is made in
+`OnAfterRender`, with collage's `AfterRenderEvent.Hoist` — the hoist a plugin can
+make after a render, landing where the layout put `{{hoist "head"}}`:
 
-The rewritten HTML is what the page cache stores, so the default card is computed
-once per cached page, like the page.
+1. The plugin reads the title and description from the rendered head with
+   `golang.org/x/net/html`'s tokenizer, not by matching strings: a minimizer that
+   ran first may have dropped the quotes around attributes.
+2. It renders the default template with them, hashes and records the spec.
+3. It hoists `og:image` with `ev.Hoist`. **`Hoist` refuses a key the render already
+   declared** — so a page that set its own card, or a cover through
+   `meta.Set(rc, meta.Page{Image: ...})`, keeps it, and `Hoist` reporting false is
+   the signal to stop. When it succeeds, the plugin hoists the rest of §5.4's tags
+   the same way.
+
+`twitter:card` cannot be done this way: elagoht/meta declares `summary` on every
+page before any fragment runs, and `Hoist` will not replace it. So when `Default`
+is set, the plugin declares `twitter:card=summary_large_image` in its own
+`OnBeforeRender`, at the same depth as meta's; registered after elagoht/meta, its
+declaration is the later one and wins. A page declaring its own `twitter:card` is
+deeper and wins over both.
+
+With elagoht/meta, leave its `DefaultImage` unset: a default image is an `og:image`
+declared on every page, and the default card would never apply.
+
+`.Page.Locale` is the event's `Locale`. `.Page.Path` — the request's path, which
+the event does not carry — is stored by the plugin's `OnBeforeRender` where its
+`OnAfterRender` can read it (§15).
+
+The rewritten HTML is what the page cache stores (collage caches the HTML the
+`AfterRender` hooks leave), so the default card is computed once per cached page,
+like the page.
 
 ### 5.4 The head tags
 
@@ -239,8 +276,12 @@ The order is the developer's decision and is documented as such.
 ## 6. The HTML and CSS subset
 
 The renderer implements a documented subset of HTML and CSS, with the meaning CSS
-gives it. A card that stays inside the subset renders the same in a browser — which
-is the promise that lets a browser-backed renderer (§13) take the same templates.
+gives it, over a fixed default stylesheet (§6.6). A card inside the subset looks
+close to the same card in a browser given that stylesheet — close enough to design
+by, and what lets a browser-backed renderer (§13) take the same templates. It is
+not pixel-identical: text is rasterized differently, and `data-fit` is the
+renderer's own (§6.4). **The development preview (§8.4) is the truth**; a browser
+is a sketchpad.
 
 ### 6.1 Elements
 
@@ -255,10 +296,27 @@ Any other element is an error. Attributes other than `style`, `src`, `alt`,
 `data-fit` and `class` are errors; `class` is accepted and ignored, so markup
 copied from a page does not fail on it.
 
+**Every element is one of two kinds**, decided by what it holds:
+
+- **A flex container** declares `display:flex`. Its children are boxes, laid out by
+  §6.2; text directly inside it is a box of its own. This is the only layout there
+  is: no block flow, no floats.
+- **A text block** declares no `display` (or the clamp idiom of §6.4) and holds
+  only text and text-level elements: `span`, `strong`, `b`, `em`, `i`, `small`,
+  `br`. It is a paragraph: its text and the runs inside it are laid out together,
+  wrapping across them, each run keeping its own font, weight, colour and size — so
+  `a <b>modular</b> monolith` reads as a sentence with one bold word, as in a
+  browser.
+
+An element with a box among its children — a `div`, an `img`, a heading — and no
+`display:flex` is `ErrUnsupported` ("declare display:flex"), as Satori requires.
+In a browser such an element would be block flow, which the renderer does not
+draw, so it is refused rather than drawn differently.
+
 ### 6.2 Layout
 
-Every box is a flex container. `display` is `flex` (the default) or `none`; there is
-no block or inline flow, so a box's children are laid out on its main axis.
+A flex container lays its children out on its main axis. `display` is `flex`,
+`none`, or — on a text block only — the clamp idiom.
 
 | Property | Values |
 | --- | --- |
@@ -304,14 +362,20 @@ Colours are `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()`
 | `text-align` | `left`, `center`, `right` |
 | `text-transform` | `none`, `uppercase`, `lowercase` (Unicode-aware: `i` → `İ` in a `tr` card) |
 | `white-space` | `normal`, `nowrap`, `pre-wrap` |
-| `-webkit-line-clamp`, `line-clamp` | a number of lines, ellipsis after the last |
+| `-webkit-line-clamp` | a number of lines, ellipsis after the last — in the clamp idiom below |
 | `text-overflow` | `ellipsis` with `white-space: nowrap` |
 
-Text wraps at spaces and at the break opportunities of Unicode line breaking
-(UAX #14) a card meets in practice: after hyphens, and between CJK ideographs.
+**The clamp idiom.** A browser clamps lines only with all four declarations
+together: `display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N;
+overflow:hidden`. The renderer accepts exactly that combination on a text block,
+and refuses `-webkit-line-clamp` without the other three, since a browser would
+ignore it and the card would look clamped in one and not the other.
+
+Text wraps at spaces and after hyphens, the break opportunities of Unicode line
+breaking (UAX #14) that the scripts of §2 meet.
 
 **`data-fit`** is the one extension, an attribute rather than a property so a
-browser ignores it: the text's font size is reduced, in 2px steps, until it fits
+browser ignores it — and so in a browser the text keeps its declared size: the text's font size is reduced, in 2px steps, until it fits
 its box within its line clamp, down to half the declared size. It is what a title
 needs when it may be four words or forty.
 
@@ -333,6 +397,25 @@ character is in the template, at render when it came in the data.
 
 `object-fit: cover | contain | fill` and `object-position: center` (other positions
 are v0.2). Formats are PNG, JPEG, GIF (first frame) and WebP.
+
+### 6.6 The default stylesheet
+
+What the renderer assumes before a template's own styles, and what a browser must
+be given to look the same — the fixture harness (§12.3) injects it into Chrome:
+
+```css
+* { margin: 0; padding: 0; box-sizing: border-box; border: 0 solid; }
+html, body { width: max-content; }
+h1 { font-size: 2em; font-weight: 700; }   h2 { font-size: 1.5em; font-weight: 700; }
+h3 { font-size: 1.17em; font-weight: 700; } h4 { font-size: 1em; font-weight: 700; }
+h5 { font-size: .83em; font-weight: 700; }  h6 { font-size: .67em; font-weight: 700; }
+strong, b { font-weight: 700; }  em, i { font-style: italic; }  small { font-size: .83em; }
+img { display: block; }
+:root { font-family: sans-serif; font-size: 16px; line-height: 1.2; color: #000; }
+```
+
+No margins, so a heading sits where its box says; border-box, so a `width` is the
+box's whole width.
 
 ## 7. Content addressing
 
@@ -405,8 +488,10 @@ cards no render recorded yet.
 ### 8.4 Development
 
 In development nothing is cached: every `GET /_og/<hash>.png` draws the card again,
-and templates are read from disk on every `Set`, so an edited template shows up on
-the next page reload and the next image request. `/_og/preview/` (development only)
+and templates are read from `Templates` on every `Set`, so an edited template shows
+up on the next page reload and the next image request — provided the application
+hands the plugin the directory on disk in development, as the collage scaffold does
+for its static files. An `embed.FS` is fixed at build time and never reloads. `/_og/preview/` (development only)
 lists the cards this process recorded, newest first, beside the page that recorded
 each, and reloads itself when a card template changes.
 
@@ -460,8 +545,10 @@ The plugin produces images on request, which costs CPU and memory. The model:
   server. It is the loop for designing a card, and the way to keep golden images
   in a repository.
 - **Testing:** `ogimage.Draw(cfg, html) (image.Image, error)` draws card HTML
-  directly, for golden tests; `ogimage.Recorded(app, path)` returns the card a
-  page recorded on its last render, for asserting a page sets the card it should.
+  directly, for golden tests; `(*Plugin).Recorded(path)` returns the card a page
+  recorded on its last render — its template, `Card`, HTML and URL — for asserting
+  a page sets the card it should. It is a method on the plugin the test built,
+  since a `*collage.App` does not hand its plugins out.
 - **`collage check`**: v0.2 contributes the card templates' validation to it.
 
 ## 12. Implementation
@@ -506,16 +593,20 @@ The hardest part and the one most worth being exact about:
 
 | Phase | Delivers | Done when |
 | --- | --- | --- |
-| 1 | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses, every unsupported input names its line and column |
-| 2 | `internal/layout` | layout matches Chrome to the pixel on a fixture set of flex cases |
-| 3 | `internal/text` | wrapping, clamping and `data-fit` match Chrome within 1px per line on fixtures, Turkish included |
-| 4 | `internal/paint`, `internal/fetch` | golden PNGs for every fixture |
+| 1 | `internal/css`, `internal/dom`, validation with positions | every row of §6 parses; every unsupported input, and every element breaking §6.1's two kinds, names its line and column |
+| 2 | `internal/layout` | every element's box is within 1px of the rect Chrome reports for it, on a fixture set of flex cases |
+| 3 | `internal/text` | line count and the character each line breaks after match Chrome on fixtures, Turkish included; `data-fit` sizes are checked against the renderer's own expectations, since a browser has none |
+| 4 | `internal/paint`, `internal/fetch` | golden PNGs, compared with the renderer's own previous output |
 | 5 | plugin: `Set`, store, mount, head tags, default card, export, preview, command | an end-to-end site test: a post page's `og:image` URL serves its card, a restart serves it from `Dir`, an export writes it |
 | 6 | documentation, `collage.json`, release v0.1.0 | README complete; listed in collage's plugin CI matrix |
 
-Fixtures for phases 2–4 are pairs of HTML and a PNG screenshot of the same HTML in
-headless Chrome, taken once and committed; Chrome is needed to make a fixture, not
-to run the tests.
+Fixtures for phases 2 and 3 are HTML files and a JSON file per fixture, recorded
+once from headless Chrome with §6.6's stylesheet injected: every element's
+`getBoundingClientRect()`, and for text blocks each line's first and last
+character. Chrome draws text with Skia and hinting, the renderer with
+`x/image/vector`, so pixels are never compared across them — boxes and line breaks
+are. Chrome is needed to record a fixture, not to run the tests. Phase 4's golden
+PNGs are the renderer's own, reviewed by eye when they change.
 
 ## 13. Later
 
@@ -537,5 +628,27 @@ to run the tests.
 | hash of the executed HTML | hash of template name + data | it is exactly what is drawn; template edits and data changes are both caught, with no serialization of data |
 | draw on first GET | draw during the page render | a page is never slower for its card, and an unrequested card is never drawn |
 | spec on disk | memory only | a page cached on disk outlives the process that recorded its card |
-| default card in `OnAfterRender` | requiring `Set` on every page | the title and description exist only once the page has rendered; plugins cannot hoist after it, so the head is rewritten |
+| default card in `OnAfterRender` with `ev.Hoist` | requiring `Set` on every page; rewriting the head by hand | the title and description exist only once the page has rendered; `Hoist` lands in the layout's head and refuses keys the page declared, which is exactly "unless the page has its own" |
+| `Set` returns an error | logging | a broken card fails where it was asked for, as the handler's other failures do; a handler can still choose to log and continue |
+| two element kinds, `display:flex` required on containers | everything a flex box | a browser draws the same template the same way, and `<b>` mid-sentence is a run, not a box |
 | errors at startup | best-effort drawing | a card drawn wrong is shared before anyone sees it |
+
+## 15. Open questions, to settle in phase 5
+
+These rest on how collage behaves, and are checked against it before the plugin
+relies on them — each with what to do if the answer is no.
+
+1. **`OnBeforeRender` order at depth zero.** §5.3 has the plugin's
+   `twitter:card=summary_large_image` win over elagoht/meta's `summary` because it
+   is declared later, by a plugin registered later. If plugin order does not decide
+   which depth-zero declaration wins, the fallback is an option on elagoht/meta to
+   leave `twitter:card` to another plugin.
+2. **The request path in `OnAfterRender`.** `AfterRenderEvent` carries the page and
+   locale but not the path a parameterised page was reached at. The plan is to
+   store it from `OnBeforeRender` in the render's shared data under a key private
+   to the plugin, which `AfterRenderEvent.Data` exposes. If that proves fragile,
+   `AfterRenderEvent.Path` is a small change to collage's core.
+3. **Concurrent fragments.** `Set` from sibling fragments' handlers runs
+   concurrently. Recording must be safe for that, and "the card that won" must be
+   the one whose hoisted `og:image` won — decided after the render, from the
+   declarations, not from the order `Set` calls arrived in.

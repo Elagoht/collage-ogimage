@@ -6,10 +6,17 @@
 // documented subset of HTML and CSS. A page declares its card from its data
 // handler:
 //
-//	ogimage.Set(rc, "og/post.html", ogimage.Card{Title: post.Title, Label: post.Category})
+//	if err := ogimage.Set(rc, "og/post.html", ogimage.Card{Title: post.Title, Label: post.Category}); err != nil {
+//		return view{}, nil, err
+//	}
 //
 // and the head gets og:image, its size and type, and a large Twitter card. A page
 // that sets none gets Config.Default, drawn from its title and description.
+//
+// A template is written in two kinds of element: a flex container, which says
+// display:flex and holds boxes, and a text block, which holds text and inline
+// runs such as <b>. Inside that subset a card looks close to the same in a
+// browser; the development preview at /_og/preview/ is the truth.
 //
 // A card's URL is a hash of what is drawn, so it is served immutable and never
 // needs invalidating: a changed page has a new card at a new URL. It is drawn on

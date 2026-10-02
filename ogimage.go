@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log/slog"
 	"maps"
+	"net/http"
 	"net/url"
 	"slices"
 	"strings"
@@ -70,7 +71,7 @@ func NewWith(cfg Config) *Plugin {
 func (p *Plugin) Name() string { return Name }
 
 // Version returns the plugin's release.
-func (p *Plugin) Version() string { return "0.1.1" }
+func (p *Plugin) Version() string { return "0.1.2" }
 
 // Configure decodes the plugin configuration over the plugin's Config, fills its
 // defaults and validates it.
@@ -151,9 +152,10 @@ func (p *Plugin) OnBeforeRender(_ context.Context, ev *collage.BeforeRenderEvent
 	if rc == nil || p.store == nil {
 		return nil
 	}
-	st := &renderState{plugin: p, locale: rc.Locale, cards: map[string]RecordedCard{}}
+	st := &renderState{plugin: p, locale: rc.Locale, origin: p.baseURL, cards: map[string]RecordedCard{}}
 	if rc.Request != nil {
 		st.path = rc.Request.URL.Path
+		st.origin = p.origin(rc.Request)
 	}
 	rc.Set(stateKey, st)
 	if p.cfg.Default != "" {
@@ -171,7 +173,7 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 	}
 	head := readHead(ev.HTML)
 	if p.cfg.Default != "" && head.image == "" {
-		rec, err := p.record(p.cfg.Default, Card{Title: head.title, Description: head.description}, st.path, st.locale)
+		rec, err := p.record(p.cfg.Default, Card{Title: head.title, Description: head.description}, st.origin, st.path, st.locale)
 		if err != nil {
 			p.log.Warn("ogimage: the default card could not be made", "path", st.path, "err", err)
 		} else {
@@ -186,7 +188,7 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 	}
 	// The page's card is the og:image its head ended up with: collage's hoist
 	// rules decided it, not the order Set calls arrived in (DESIGN.md §15.3).
-	prefix := p.baseURL + p.cfg.Prefix
+	prefix := st.origin + p.cfg.Prefix
 	if !strings.HasPrefix(head.image, prefix) {
 		return nil
 	}
@@ -204,6 +206,21 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 	}
 	p.mu.Unlock()
 	return nil
+}
+
+// origin is what a request's card URLs are absolute against: the application's
+// BaseURL, except in development, where it is the request's own scheme and host,
+// so a card opened from a page served on localhost is drawn by that server rather
+// than looked for on the live site. The card's hash does not change with it.
+func (p *Plugin) origin(r *http.Request) string {
+	if !p.devMode || r.Host == "" {
+		return p.baseURL
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }
 
 // Recorded returns the card the page at path carried on its last render: its

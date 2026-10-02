@@ -6,6 +6,8 @@ import (
 	"errors"
 	"image/png"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -390,5 +392,53 @@ func TestDevelopment(t *testing.T) {
 	c.Get(after).WantStatus(http.StatusOK)
 	if preview := c.Get("/_og-preview/").WantStatus(http.StatusOK).Body; !strings.Contains(preview, "/p") {
 		t.Errorf("the preview does not list the page:\n%s", preview)
+	}
+}
+
+// A card's URL is absolute against BaseURL, except in development, where it is
+// the request's own origin: a card opened from a page on localhost is drawn by
+// that server, not looked for on the live site. Its hash is the same either way.
+func TestDevelopmentCardsAreServedFromTheRequestsOrigin(t *testing.T) {
+	hashes := map[bool]string{}
+	for _, dev := range []bool{false, true} {
+		og := NewWith(Config{Templates: templates, Root: "t", Default: "og/post.html"})
+		app, err := collage.New(&collage.Config{
+			DevMode:  dev,
+			BaseURL:  "https://example.com",
+			Template: collage.TemplateConfig{FS: templates, Root: "t"},
+			Plugins:  []collage.Plugin{og},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := app.RegisterPage(collage.NewPage("p").WithLayouts(collage.NewFragment("layout", "layout.html").Build()).
+			WithContent(collage.NewFragment("c", "page.html").Build()).WithPath("en", "/p").Dynamic().Build()); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "http://localhost:3000/p", nil)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		card := cardURL(t, rec.Body.String())
+		want := "https://example.com/_og/"
+		if dev {
+			want = "http://localhost:3000/_og/"
+		}
+		if !strings.HasPrefix(card, want) {
+			t.Errorf("dev=%v: og:image = %q, want it under %s", dev, card, want)
+		}
+		if _, ok := og.Recorded("/p"); !ok {
+			t.Errorf("dev=%v: the page's card was not recorded", dev)
+		}
+		hashes[dev] = hashOf(card)
+
+		u, _ := url.Parse(card)
+		rec = httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://localhost:3000"+u.Path, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("dev=%v: GET %s = %d", dev, u.Path, rec.Code)
+		}
+	}
+	if hashes[false] != hashes[true] {
+		t.Errorf("the card's hash depends on the origin: %s and %s", hashes[false], hashes[true])
 	}
 }

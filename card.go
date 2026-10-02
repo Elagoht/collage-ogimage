@@ -54,6 +54,9 @@ type renderState struct {
 	plugin *Plugin
 	path   string
 	locale string
+	// origin is what card URLs are absolute against: the application's
+	// BaseURL, or in development the request's own origin.
+	origin string
 
 	mu       sync.Mutex
 	cards    map[string]RecordedCard // by hash, every card this render recorded
@@ -92,7 +95,7 @@ func Set(rc *collage.RenderContext, tmpl string, card Card) error {
 	if !ok || st == nil {
 		return nil
 	}
-	rec, err := st.plugin.record(tmpl, card, st.path, st.locale)
+	rec, err := st.plugin.record(tmpl, card, st.origin, st.path, st.locale)
 	if err != nil {
 		return err
 	}
@@ -139,8 +142,9 @@ func cardTags(rec RecordedCard) [][2]string {
 	return tags
 }
 
-// record executes a card template, validates what it produced, and records it.
-func (p *Plugin) record(tmpl string, card Card, pagePath, locale string) (RecordedCard, error) {
+// record executes a card template, validates what it produced, and records it,
+// at a URL absolute against origin.
+func (p *Plugin) record(tmpl string, card Card, origin, pagePath, locale string) (RecordedCard, error) {
 	t, err := p.template(tmpl)
 	if err != nil {
 		return RecordedCard{}, err
@@ -166,7 +170,7 @@ func (p *Plugin) record(tmpl string, card Card, pagePath, locale string) (Record
 	p.noteCard(pagePath, hash)
 	return RecordedCard{
 		Template: tmpl, Card: card, HTML: html, Width: w, Height: h,
-		URL: p.baseURL + p.cfg.Prefix + hash + ".png",
+		URL: origin + p.cfg.Prefix + hash + ".png",
 	}, nil
 }
 

@@ -32,7 +32,7 @@ func (p *Plugin) command() collage.Command {
 					return fmt.Errorf("ogimage: %s: %w", args[1], err)
 				}
 			}
-			rec, err := p.record(args[0], card, "/", "en")
+			rec, err := p.record(args[0], card, p.baseURL, "/", "en")
 			if err != nil {
 				return err
 			}

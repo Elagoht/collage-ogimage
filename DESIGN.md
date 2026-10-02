@@ -1,6 +1,6 @@
 # elagoht/ogimage — design
 
-Status: **v0.1.1 — all six phases done** (§12.3).
+Status: **v0.1.2 — all six phases done** (§12.3).
 implementation is written against. Where the code and this document disagree, one
 of them is a bug; decide which, and fix both.
 
@@ -273,7 +273,11 @@ and so elagoht/meta — use:
 ```
 
 The URL is absolute against `Host.BaseURL()` (collage v0.39.0), as networks
-require; the application does not start without one. Called after `meta.Set` in the
+require; the application does not start without one. In development it is absolute
+against the request's own scheme and host instead (v0.1.2): a card opened from a
+page on `localhost:3000` is drawn by that server, not looked for on the live site,
+which does not have it. The hash does not include the origin, so the card is the
+same one. Called after `meta.Set` in the
 same handler, `ogimage.Set` replaces meta's `og:image`; called before, meta's wins.
 The order is the developer's decision and is documented as such.
 

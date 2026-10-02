@@ -288,6 +288,9 @@ So:
   a new URL; the post's page — invalidated the way it always is, by a webhook or a
   TTL — carries the new `og:image`. Two pages whose cards come out the same share
   one image.
+- **It is absolute against `Config.BaseURL`**, except in development, where it
+  is against the request's own origin — `http://localhost:3000/_og/….png` — so a
+  card opened from a local page is drawn by the local server. The hash is the same.
 - **It is drawn on the first request for it**, not while the page renders. A page
   is never slower for its card, and a card nobody shares is never drawn.
 

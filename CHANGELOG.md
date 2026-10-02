@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.2
+
+- In development a card's URL is absolute against the request's own origin, not
+  `Config.BaseURL`: a card opened from a page on localhost was looked for on the
+  live site, which does not have it. Production URLs, and every card's hash, are
+  unchanged.
+
 ## v0.1.1
 
 - A card template may hold a `{{/* comment */}}` before its root element, or

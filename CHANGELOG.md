@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.0
+
+- On a site served on several hosts, a card's URL and the `.Site` a template draws
+  follow the request's origin (`collage.BaseURL`), so `Config.BaseURL` is no longer
+  required when a plugin implementing `collage.OriginResolver` is registered.
+  Requires collage v0.42.0. A site with a `Config.BaseURL` is unchanged, and so is
+  every card's hash.
+
 ## v0.1.2
 
 - In development a card's URL is absolute against the request's own origin, not

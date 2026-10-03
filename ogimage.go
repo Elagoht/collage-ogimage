@@ -30,7 +30,6 @@ type Plugin struct {
 
 	devMode    bool
 	baseURL    string
-	site       SiteInfo
 	log        *slog.Logger
 	renderer   *renderer
 	store      *store
@@ -71,7 +70,7 @@ func NewWith(cfg Config) *Plugin {
 func (p *Plugin) Name() string { return Name }
 
 // Version returns the plugin's release.
-func (p *Plugin) Version() string { return "0.1.2" }
+func (p *Plugin) Version() string { return "0.2.0" }
 
 // Configure decodes the plugin configuration over the plugin's Config, fills its
 // defaults and validates it.
@@ -96,15 +95,16 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	p.log = host.Logger()
 	p.devMode = host.DevMode()
 	p.baseURL = strings.TrimSuffix(host.BaseURL(), "/")
-	u, err := url.Parse(p.baseURL)
-	if p.baseURL == "" || err != nil || u.Host == "" {
+	if p.baseURL == "" && !canResolve(host) {
 		return fmt.Errorf("%w, got %q", ErrNoBaseURL, p.baseURL)
 	}
-	p.site = SiteInfo{Name: p.cfg.SiteName, URL: p.baseURL, Host: u.Host}
-	if p.site.Name == "" {
-		p.site.Name = u.Host
+	if p.baseURL != "" {
+		if u, err := url.Parse(p.baseURL); err != nil || u.Host == "" {
+			return fmt.Errorf("%w, got %q", ErrNoBaseURL, p.baseURL)
+		}
 	}
 
+	var err error
 	if p.renderer, err = newRenderer(p.cfg); err != nil {
 		return err
 	}
@@ -152,10 +152,14 @@ func (p *Plugin) OnBeforeRender(_ context.Context, ev *collage.BeforeRenderEvent
 	if rc == nil || p.store == nil {
 		return nil
 	}
-	st := &renderState{plugin: p, locale: rc.Locale, origin: p.baseURL, cards: map[string]RecordedCard{}}
+	canonical := collage.BaseURL(rc)
+	if canonical == "" {
+		canonical = p.baseURL
+	}
+	st := &renderState{plugin: p, locale: rc.Locale, origin: canonical, site: p.siteFor(canonical), cards: map[string]RecordedCard{}}
 	if rc.Request != nil {
 		st.path = rc.Request.URL.Path
-		st.origin = p.origin(rc.Request)
+		st.origin = p.origin(rc.Request, canonical)
 	}
 	rc.Set(stateKey, st)
 	if p.cfg.Default != "" {
@@ -173,7 +177,7 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 	}
 	head := readHead(ev.HTML)
 	if p.cfg.Default != "" && head.image == "" {
-		rec, err := p.record(p.cfg.Default, Card{Title: head.title, Description: head.description}, st.origin, st.path, st.locale)
+		rec, err := p.record(p.cfg.Default, Card{Title: head.title, Description: head.description}, st.site, st.origin, st.path, st.locale)
 		if err != nil {
 			p.log.Warn("ogimage: the default card could not be made", "path", st.path, "err", err)
 		} else {
@@ -209,12 +213,12 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 }
 
 // origin is what a request's card URLs are absolute against: the application's
-// BaseURL, except in development, where it is the request's own scheme and host,
+// canonical origin (collage.BaseURL), except in development, where it is the request's own scheme and host,
 // so a card opened from a page served on localhost is drawn by that server rather
 // than looked for on the live site. The card's hash does not change with it.
-func (p *Plugin) origin(r *http.Request) string {
+func (p *Plugin) origin(r *http.Request, canonical string) string {
 	if !p.devMode || r.Host == "" {
-		return p.baseURL
+		return canonical
 	}
 	scheme := "http"
 	if r.TLS != nil {
@@ -265,4 +269,29 @@ func fontsDigest(data [][]byte) []byte {
 		h.Write([]byte{0})
 	}
 	return h.Sum(nil)
+}
+
+// siteFor is the SiteInfo a card is drawn with, for the site at origin: the
+// canonical origin, never development's request origin, so a card's hash does not
+// change between localhost and the live site.
+func (p *Plugin) siteFor(origin string) SiteInfo {
+	s := SiteInfo{Name: p.cfg.SiteName, URL: origin}
+	if u, err := url.Parse(origin); err == nil {
+		s.Host = u.Host
+	}
+	if s.Name == "" {
+		s.Name = s.Host
+	}
+	return s
+}
+
+// canResolve reports whether collage can name an origin without the plugin's
+// own BaseURL: from Config.BaseURL, or per host from a plugin implementing
+// collage.OriginResolver.
+func canResolve(host collage.Host) bool {
+	if host.BaseURL() != "" {
+		return true
+	}
+	origins, ok := host.(collage.Origins)
+	return ok && origins.Dynamic()
 }

@@ -102,6 +102,62 @@ func cardURL(t *testing.T, body string) string {
 	return m[1]
 }
 
+// origins resolves two hosts, as elagoht/tenant would.
+type origins struct{}
+
+func (origins) Name() string                             { return "test/origins" }
+func (origins) Version() string                          { return "0" }
+func (origins) Init(context.Context, collage.Host) error { return nil }
+func (origins) Shutdown(context.Context) error           { return nil }
+func (origins) Origin(_ context.Context, host string) (string, bool) {
+	switch host {
+	case "a.test":
+		return "https://a.example", true
+	case "b.test":
+		return "https://b.example", true
+	}
+	return "", false
+}
+
+// hostSite is newSite's application with origins registered before the plugin
+// and no Config.BaseURL.
+func hostSite(t *testing.T) http.Handler {
+	t.Helper()
+	og := NewWith(Config{Templates: templates, Root: "t", Default: "og/default.html"})
+	app, err := collage.New(&collage.Config{
+		Template: collage.TemplateConfig{FS: templates, Root: "t"},
+		Cache:    collage.CacheConfig{Enabled: true, Type: "memory", DefaultTTL: time.Hour},
+		Plugins:  []collage.Plugin{origins{}, og},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	layout := collage.NewFragment("layout", "layout.html").Build()
+	about := collage.NewPage("about").WithLayouts(layout).
+		WithContent(collage.NewFragment("about-content", "page.html").WithDataHandler(
+			collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
+				rc.HoistTitle("About me")
+				return "about", nil
+			})).Build()).
+		WithPath("en", "/about").Incremental(time.Hour).Build()
+	if err := app.Register(about); err != nil {
+		t.Fatal(err)
+	}
+	return app.Handler()
+}
+
+// Without Config.BaseURL, a card's URL follows the request's origin.
+func TestCard_OriginFollowsHost(t *testing.T) {
+	h := hostSite(t)
+	for host, want := range map[string]string{"a.test": "https://a.example/_og/", "b.test": "https://b.example/_og/"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://"+host+"/about", nil))
+		if got := cardURL(t, rec.Body.String()); !strings.HasPrefix(got, want) {
+			t.Errorf("%s og:image %q, want prefix %s", host, got, want)
+		}
+	}
+}
+
 func TestAPageThatSetsItsCard(t *testing.T) {
 	s := newSite(t, "", meta.New(meta.Options{}))
 	c := collagetest.New(t, s.app.Handler())

@@ -57,6 +57,8 @@ type renderState struct {
 	// origin is what card URLs are absolute against: the application's
 	// BaseURL, or in development the request's own origin.
 	origin string
+	// site is the SiteInfo cards are drawn with, from the canonical origin.
+	site SiteInfo
 
 	mu       sync.Mutex
 	cards    map[string]RecordedCard // by hash, every card this render recorded
@@ -95,7 +97,7 @@ func Set(rc *collage.RenderContext, tmpl string, card Card) error {
 	if !ok || st == nil {
 		return nil
 	}
-	rec, err := st.plugin.record(tmpl, card, st.origin, st.path, st.locale)
+	rec, err := st.plugin.record(tmpl, card, st.site, st.origin, st.path, st.locale)
 	if err != nil {
 		return err
 	}
@@ -144,13 +146,13 @@ func cardTags(rec RecordedCard) [][2]string {
 
 // record executes a card template, validates what it produced, and records it,
 // at a URL absolute against origin.
-func (p *Plugin) record(tmpl string, card Card, origin, pagePath, locale string) (RecordedCard, error) {
+func (p *Plugin) record(tmpl string, card Card, site SiteInfo, origin, pagePath, locale string) (RecordedCard, error) {
 	t, err := p.template(tmpl)
 	if err != nil {
 		return RecordedCard{}, err
 	}
 	var b bytes.Buffer
-	data := cardData{Card: card, Site: p.site, Page: PageInfo{Path: pagePath, Locale: locale}}
+	data := cardData{Card: card, Site: site, Page: PageInfo{Path: pagePath, Locale: locale}}
 	if err := t.Execute(&b, data); err != nil {
 		return RecordedCard{}, fmt.Errorf("ogimage: %s: %w", tmpl, err)
 	}

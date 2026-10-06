@@ -7,10 +7,10 @@ module github.com/Elagoht/collage-ogimage
 
 go 1.26.0
 
-require github.com/Elagoht/collage v0.42.0
+require github.com/Elagoht/collage v0.49.0
 
 require (
-	github.com/Elagoht/collage-meta v0.1.4
+	github.com/Elagoht/collage-meta v0.2.1
 	golang.org/x/net v0.59.0
 )
 

@@ -64,9 +64,9 @@ func newSite(t *testing.T, dir string, extra ...collage.Plugin) *site {
 		t.Fatal(err)
 	}
 	layout := func() *collage.Fragment { return collage.NewFragment("layout", "layout.html").Build() }
-	page := func(name, path string, handler collage.DataHandlerFunc) *collage.Page {
+	page := func(name, path string, data collage.Data) *collage.Page {
 		return collage.NewPage(name).WithLayouts(layout()).
-			WithContent(collage.NewFragment(name+"-content", "page.html").WithDataHandler(handler).Build()).
+			WithContent(collage.NewFragment(name+"-content", "page.html").WithData(data).Build()).
 			WithPath("en", path).Incremental(time.Hour).Build()
 	}
 	err = app.Register(
@@ -134,7 +134,7 @@ func hostSite(t *testing.T) http.Handler {
 	}
 	layout := collage.NewFragment("layout", "layout.html").Build()
 	about := collage.NewPage("about").WithLayouts(layout).
-		WithContent(collage.NewFragment("about-content", "page.html").WithDataHandler(
+		WithContent(collage.NewFragment("about-content", "page.html").WithData(
 			collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 				rc.HoistTitle("About me")
 				return "about", nil
@@ -386,7 +386,7 @@ func TestSiblingCardsResolveByTheHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(name, title string) *collage.Fragment {
-		return collage.NewInlineFragment(name, `<i>{{.}}</i>`).WithDataHandler(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
+		return collage.NewInlineFragment(name, `<i>{{.}}</i>`).WithData(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 			return name, Set(rc, "og/post.html", Card{Title: title})
 		})).Build()
 	}
@@ -433,7 +433,7 @@ func TestDevelopment(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := app.RegisterPage(collage.NewPage("p").WithLayouts(collage.NewFragment("layout", "layout.html").Build()).
-		WithContent(collage.NewFragment("c", "page.html").WithDataHandler(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
+		WithContent(collage.NewFragment("c", "page.html").WithData(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 			return "x", Set(rc, "og/post.html", Card{Title: "Live"})
 		})).Build()).WithPath("en", "/p").Dynamic().Build()); err != nil {
 		t.Fatal(err)

@@ -1,7 +1,7 @@
-github.com/Elagoht/collage v0.42.0 h1:yax2vyg3YdRCuz/lQZBuA0Sn5JIWZdkroGiM4gHSzMo=
-github.com/Elagoht/collage v0.42.0/go.mod h1:tyGWGpujZXtCFFxn9pjws85HOFOt4QdiuRswwQhj1Qw=
-github.com/Elagoht/collage-meta v0.1.4 h1:HIYFPWRI058ub7z7gbtrXvqS1gQypWjtyjxy/9mBFLE=
-github.com/Elagoht/collage-meta v0.1.4/go.mod h1:92RYfQeSFIZTlqcrBZ1IF4Xdfgd4isV0a50O5RjRAr4=
+github.com/Elagoht/collage v0.49.0 h1:kgvo+vpy9jWlKVIfvGNKHnjolWAHbke9s9jnQPJMUkM=
+github.com/Elagoht/collage v0.49.0/go.mod h1:tyGWGpujZXtCFFxn9pjws85HOFOt4QdiuRswwQhj1Qw=
+github.com/Elagoht/collage-meta v0.2.1 h1:2S4U7Tti+oMQcC/b5s6qKxjupdGTYdrTHRFVi2U/j8I=
+github.com/Elagoht/collage-meta v0.2.1/go.mod h1:b+geur+xSqxOq6nlv8u/+V1KjYLIkwRPtWkWY7uHCtY=
 golang.org/x/image v0.46.0 h1:b1+oYj0Jbp6K5MDT4i4/eZpYlk3V8SJhhDKh6LBHAyQ=
 golang.org/x/image v0.46.0/go.mod h1:3B3W05VGVQyuXucLINLjXKrqISASfi4Xj+iCVkLMwew=
 golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=

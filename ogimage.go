@@ -70,7 +70,7 @@ func NewWith(cfg Config) *Plugin {
 func (p *Plugin) Name() string { return Name }
 
 // Version returns the plugin's release.
-func (p *Plugin) Version() string { return "0.2.0" }
+func (p *Plugin) Version() string { return "0.2.1" }
 
 // Configure decodes the plugin configuration over the plugin's Config, fills its
 // defaults and validates it.

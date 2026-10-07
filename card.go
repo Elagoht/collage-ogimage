@@ -49,7 +49,7 @@ type cardData struct {
 }
 
 // renderState is the plugin's, on a render: put there by OnBeforeRender with
-// rc.Set, where Set and OnAfterRender find it (DESIGN.md §15.2).
+// stateKey.Set, where Set and OnAfterRender find it (DESIGN.md §15.2).
 type renderState struct {
 	plugin *Plugin
 	path   string
@@ -67,7 +67,7 @@ type renderState struct {
 
 // stateKey is the key the render state is kept under; prefixed with the plugin's
 // name, as nothing else on the render uses.
-const stateKey = Name + ":render"
+var stateKey = collage.NewKey[*renderState](Name + ":render")
 
 // RecordedCard is a card a page recorded: what it was drawn from, and where.
 type RecordedCard struct {
@@ -93,7 +93,7 @@ func Set(rc *collage.RenderContext, tmpl string, card Card) error {
 	if rc == nil {
 		return nil
 	}
-	st, ok := collage.Get[*renderState](rc, stateKey)
+	st, ok := stateKey.Get(rc)
 	if !ok || st == nil {
 		return nil
 	}

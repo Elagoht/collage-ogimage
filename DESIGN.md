@@ -195,8 +195,8 @@ step out of the page's render.
 `Set(rc, template, card)`:
 
 1. Finds the plugin's state where elagoht/meta finds its own: on the render
-   context, put there by the plugin's `OnBeforeRender` with `rc.Set` and read with
-   `collage.Get`. It is carried by the render, not by `context.Context`, so a
+   context, put there by the plugin's `OnBeforeRender` with a typed
+   `collage.Key`'s `Set` and read with its `Get`. It is carried by the render, not by `context.Context`, so a
    shared render — whose context values collage strips (v0.39.0) — still has it.
    With no plugin registered (a test), `Set` does nothing and returns nil.
 2. Looks `template` up among the card templates parsed at startup. An unknown name
@@ -249,9 +249,9 @@ declared on every page, and the default card would never apply.
 
 `.Page.Locale` is the event's `Locale`. `.Page.Path` — the request's path, which
 the event does not carry — is put on the render by the plugin's `OnBeforeRender`
-with `rc.Set`, under a key of the plugin's own, and read back in `OnAfterRender`
-from `ev.Data`: `rc.Set` writes the render's shared data, and the event's `Data` is
-that map (§15.2).
+with a `collage.Key` of the plugin's own, and read back in `OnAfterRender` with
+the key's `In(ev.Values)`: the event's `Values` are the render's shared values
+(§15.2).
 
 The rewritten HTML is what the page cache stores (collage caches the HTML the
 `AfterRender` hooks leave), so the default card is computed once per cached page,
@@ -685,12 +685,13 @@ register it after meta; a test builds both, in that order, and asserts the head.
 ### 15.2 The request path in `OnAfterRender`
 
 `AfterRenderEvent` carries the page and locale but not the path. The plugin does
-not need a change to collage's core for it: `rc.Set(key, v)` writes the render's
-`SharedData`, and `AfterRenderEvent.Data` is that same map. So `OnBeforeRender`
-puts one value of the plugin's own on the render — the request's path and locale,
-and the cards recorded so far — with `rc.Set` under a key prefixed with the
-plugin's name, and `OnAfterRender` reads it from `ev.Data`. It is the mechanism
-elagoht/meta already uses for its site, and works on collage v0.40.0.
+not need a change to collage's core for it: `key.Set(rc, v)` writes the render's
+shared values, and `AfterRenderEvent.Values` are those same values. So
+`OnBeforeRender` puts one value of the plugin's own on the render — the request's
+path and locale, and the cards recorded so far — under a
+`collage.NewKey[*renderState]` named with the plugin's prefix, and
+`OnAfterRender` reads it with `stateKey.In(ev.Values)`. It is the mechanism
+elagoht/meta uses for its site (typed keys since collage v0.50.0).
 
 ### 15.3 `Set` from fragments rendered concurrently
 

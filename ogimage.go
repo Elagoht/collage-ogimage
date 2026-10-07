@@ -70,15 +70,16 @@ func NewWith(cfg Config) *Plugin {
 func (p *Plugin) Name() string { return Name }
 
 // Version returns the plugin's release.
-func (p *Plugin) Version() string { return "0.2.1" }
+func (p *Plugin) Version() string { return "0.2.2" }
 
 // Configure decodes the plugin configuration over the plugin's Config, fills its
 // defaults and validates it.
 func (p *Plugin) Configure(_ context.Context, host collage.ConfigHost) error {
-	if err := host.Config(&p.cfg); err != nil {
+	cfg, err := collage.PluginConfig(host, p.cfg)
+	if err != nil {
 		return err
 	}
-	p.cfg = p.cfg.withDefaults()
+	p.cfg = cfg.withDefaults()
 	return p.cfg.validate()
 }
 
@@ -161,7 +162,7 @@ func (p *Plugin) OnBeforeRender(_ context.Context, ev *collage.BeforeRenderEvent
 		st.path = rc.Request.URL.Path
 		st.origin = p.origin(rc.Request, canonical)
 	}
-	rc.Set(stateKey, st)
+	stateKey.Set(rc, st)
 	if p.cfg.Default != "" {
 		rc.HoistMeta("twitter:card", "summary_large_image")
 	}
@@ -171,7 +172,7 @@ func (p *Plugin) OnBeforeRender(_ context.Context, ev *collage.BeforeRenderEvent
 // OnAfterRender adds the default card to a page that has no og:image, and notes
 // which card each page carries.
 func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) error {
-	st, _ := ev.Data[stateKey].(*renderState)
+	st, _ := stateKey.In(ev.Values)
 	if st == nil {
 		return nil
 	}

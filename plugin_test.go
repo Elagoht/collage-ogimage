@@ -284,11 +284,7 @@ func TestACardSurvivesARestart(t *testing.T) {
 func TestTheExportWritesTheCards(t *testing.T) {
 	s := newSite(t, "")
 	out := t.TempDir()
-	b, err := collage.NewBuilder(s.app, collage.BuildOptions{OutDir: out})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := b.Build(context.Background()); err != nil {
+	if _, err := collage.Build(context.Background(), s.app, collage.BuildOptions{OutDir: out}); err != nil {
 		t.Fatal(err)
 	}
 	cards, _ := filepath.Glob(filepath.Join(out, "_og", "*.png"))

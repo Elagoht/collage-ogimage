@@ -70,7 +70,7 @@ func NewWith(cfg Config) *Plugin {
 func (p *Plugin) Name() string { return Name }
 
 // Version returns the plugin's release.
-func (p *Plugin) Version() string { return "0.2.3" }
+func (p *Plugin) Version() string { return "0.2.4" }
 
 // Configure decodes the plugin configuration over the plugin's Config, fills its
 // defaults and validates it.
@@ -293,6 +293,5 @@ func canResolve(host collage.Host) bool {
 	if host.BaseURL() != "" {
 		return true
 	}
-	origins, ok := host.(collage.Origins)
-	return ok && origins.Dynamic()
+	return host.MultiOrigin()
 }

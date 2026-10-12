@@ -1,39 +1,39 @@
 package ogimage
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"path"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Elagoht/collage/pkg/collage"
 )
 
-// Defaults for the fields Config leaves at zero.
+// Defaults for the fields Options leaves at zero.
 const (
-	DefaultRoot          = "templates"
-	DefaultCardDir       = "og"
-	DefaultPrefix        = "/_og/"
-	DefaultMaxEntries    = 10000
-	DefaultMaxBytes      = 256 << 20
-	DefaultRenderTimeout = 5 * time.Second
+	defaultRoot          = "templates"
+	defaultCardDir       = "og"
+	defaultPrefix        = "/_og/"
+	defaultMaxEntries    = 10000
+	defaultMaxBytes      = 256 << 20
+	defaultRenderTimeout = 5 * time.Second
 )
 
-// ErrNoTemplates is returned when Config.Templates is nil: card templates are
+// ErrNoTemplates is returned when Options.Templates is nil: card templates are
 // files the application ships, and there is nowhere else to read them from.
-var ErrNoTemplates = errors.New("ogimage: Config.Templates is required: the fs.FS card templates are read from")
+var ErrNoTemplates = errors.New("ogimage: Options.Templates is required: the fs.FS card templates are read from")
 
 // ErrInvalidConfig wraps every other problem with a configuration.
 var ErrInvalidConfig = errors.New("ogimage: invalid configuration")
 
-// Config configures the plugin. Every field but the fs.FS ones can also come from
-// the application's plugin configuration, under "elagoht/ogimage", which is
-// decoded over the Config the plugin was built with: a key the JSON has replaces
+// Options configures the plugin. Every field but the fs.FS ones can also come
+// from the application's plugin configuration, under "elagoht/ogimage", which is
+// decoded over the Options the plugin was built with: a key the JSON has replaces
 // the field, and a key it lacks leaves it.
-type Config struct {
+type Options struct {
 	// Templates is the filesystem card templates are read from, usually the one
 	// the application parses its own templates from. Required.
 	Templates fs.FS `json:"-"`
@@ -73,18 +73,19 @@ type Config struct {
 	Dir string `json:"dir"`
 	// Prefix is the URL prefix cards are served under. Defaults to "/_og/".
 	Prefix string `json:"prefix"`
-	// MaxEntries caps how many cards are kept. Zero means DefaultMaxEntries; a
-	// negative value means unlimited.
+	// MaxEntries caps how many cards are kept, and how many pages Recorded
+	// remembers. Zero means 10000; a negative value is an error. For a store
+	// with no practical limit, write a large number.
 	MaxEntries int `json:"maxEntries"`
-	// MaxBytes caps the bytes of cards kept. Zero means DefaultMaxBytes; a
-	// negative value means unlimited.
+	// MaxBytes caps the bytes of cards kept. Zero means 256 MiB (268435456); a
+	// negative value is an error. For no practical limit, write a large number.
 	MaxBytes int64 `json:"maxBytes"`
 	// Workers is how many cards are drawn at once. Zero means half the CPUs, at
 	// least one.
 	Workers int `json:"workers"`
 	// RenderTimeout is how long one card may take to draw, including fetching its
-	// images. Zero means DefaultRenderTimeout.
-	RenderTimeout Duration `json:"renderTimeout"`
+	// images, written as a string: "5s". Zero means 5 seconds.
+	RenderTimeout collage.Duration `json:"renderTimeout"`
 }
 
 // Font is one face cards can be drawn in.
@@ -95,12 +96,12 @@ type Font struct {
 	Weight int `json:"weight"`
 	// Style is "normal" or "italic". Empty means "normal".
 	Style string `json:"style"`
-	// File is the TrueType or OpenType file's path in Config.FontFiles.
+	// File is the TrueType or OpenType file's path in Options.FontFiles.
 	File string `json:"file"`
 }
 
 // Card is what a card template is drawn from. Every card has the same shape, so
-// any card template can be Config.Default, and a page moves from the default to a
+// any card template can be Options.Default, and a page moves from the default to a
 // card of its own by naming a template.
 type Card struct {
 	// Title is the headline.
@@ -116,27 +117,27 @@ type Card struct {
 }
 
 // withDefaults fills every zero field with its default.
-func (c Config) withDefaults() Config {
+func (c Options) withDefaults() Options {
 	if c.Root == "" {
-		c.Root = DefaultRoot
+		c.Root = defaultRoot
 	}
 	if c.CardDir == "" {
-		c.CardDir = DefaultCardDir
+		c.CardDir = defaultCardDir
 	}
 	if c.Prefix == "" {
-		c.Prefix = DefaultPrefix
+		c.Prefix = defaultPrefix
 	}
 	if c.MaxEntries == 0 {
-		c.MaxEntries = DefaultMaxEntries
+		c.MaxEntries = defaultMaxEntries
 	}
 	if c.MaxBytes == 0 {
-		c.MaxBytes = DefaultMaxBytes
+		c.MaxBytes = defaultMaxBytes
 	}
 	if c.Workers == 0 {
 		c.Workers = max(1, runtime.NumCPU()/2)
 	}
 	if c.RenderTimeout == 0 {
-		c.RenderTimeout = Duration(DefaultRenderTimeout)
+		c.RenderTimeout = collage.Duration(defaultRenderTimeout)
 	}
 	for i := range c.Fonts {
 		if c.Fonts[i].Weight == 0 {
@@ -149,8 +150,10 @@ func (c Config) withDefaults() Config {
 	return c
 }
 
-// validate reports the first problem with a configuration withDefaults filled.
-func (c Config) validate() error {
+// validate reports the first problem with an Options withDefaults filled, for
+// the plugin: what drawing needs, and the templates, prefix and default card
+// serving needs.
+func (c Options) validate() error {
 	if c.Templates == nil {
 		return ErrNoTemplates
 	}
@@ -160,14 +163,26 @@ func (c Config) validate() error {
 	if c.Default != "" && !c.isCard(c.Default) {
 		return fmt.Errorf("%w: default %q is not a file under %s/", ErrInvalidConfig, c.Default, c.CardDir)
 	}
+	if c.MaxEntries < 0 {
+		return fmt.Errorf("%w: maxEntries %d is negative", ErrInvalidConfig, c.MaxEntries)
+	}
+	if c.MaxBytes < 0 {
+		return fmt.Errorf("%w: maxBytes %d is negative", ErrInvalidConfig, c.MaxBytes)
+	}
+	return c.validateDrawing()
+}
+
+// validateDrawing reports the first problem with what drawing a card reads:
+// the image sources, the fonts, the workers and the timeout. Draw checks this
+// much; it needs no templates.
+func (c Options) validateDrawing() error {
 	for prefix := range c.Files {
 		if !strings.HasPrefix(prefix, "/") || !strings.HasSuffix(prefix, "/") {
 			return fmt.Errorf("%w: files prefix %q must begin and end with /", ErrInvalidConfig, prefix)
 		}
 	}
 	for _, origin := range c.ImageOrigins {
-		u, err := url.Parse(origin)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
+		if _, err := collage.ParseOrigin(origin); err != nil {
 			return fmt.Errorf("%w: image origin %q must be a scheme and host, such as https://cms.example.com", ErrInvalidConfig, origin)
 		}
 	}
@@ -196,35 +211,7 @@ func (c Config) validate() error {
 }
 
 // isCard reports whether name is a template path under CardDir: "og/post.html".
-func (c Config) isCard(name string) bool {
+func (c Options) isCard(name string) bool {
 	clean := path.Clean(name)
 	return clean == name && strings.HasPrefix(name, c.CardDir+"/") && path.Ext(name) == ".html"
-}
-
-// Duration is a time.Duration that reads "5s" from JSON, the way a person writes
-// it, as well as a number of nanoseconds.
-type Duration time.Duration
-
-// UnmarshalJSON accepts "5s" and 5000000000 alike.
-func (d *Duration) UnmarshalJSON(data []byte) error {
-	var asNumber int64
-	if err := json.Unmarshal(data, &asNumber); err == nil {
-		*d = Duration(asNumber)
-		return nil
-	}
-	var asText string
-	if err := json.Unmarshal(data, &asText); err != nil {
-		return fmt.Errorf("ogimage: a duration is a string such as \"5s\", or nanoseconds: %w", err)
-	}
-	parsed, err := time.ParseDuration(asText)
-	if err != nil {
-		return fmt.Errorf("ogimage: duration %q: %w", asText, err)
-	}
-	*d = Duration(parsed)
-	return nil
-}
-
-// MarshalJSON writes the form a person reads.
-func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Duration(d).String())
 }

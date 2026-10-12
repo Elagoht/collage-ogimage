@@ -11,12 +11,12 @@
 //	}
 //
 // and the head gets og:image, its size and type, and a large Twitter card. A page
-// that sets none gets Config.Default, drawn from its title and description.
+// that sets none gets Options.Default, drawn from its title and description.
 //
 // A template is written in two kinds of element: a flex container, which says
 // display:flex and holds boxes, and a text block, which holds text and inline
 // runs such as <b>. Inside that subset a card looks close to the same in a
-// browser; the development preview at /_og/preview/ is the truth.
+// browser; the development preview at /_og-preview/ is the truth.
 //
 // A card's URL is a hash of what is drawn, so it is served immutable and never
 // needs invalidating: a changed page has a new card at a new URL. It is drawn on

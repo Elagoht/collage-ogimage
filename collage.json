@@ -3,7 +3,7 @@
   "name": "elagoht/ogimage",
   "description": "A collage plugin that draws each page's share card — the image a link is shown with on X, LinkedIn, Slack and in messengers — from an HTML template, in pure Go, and serves it at a URL made from its content.",
   "repository": "https://github.com/Elagoht/collage-ogimage",
-  "setup": "Cards are drawn from HTML templates in an `fs.FS`: in `plugins.go`, replace `ogimage.New()` with `ogimage.NewWith(ogimage.Config{Templates: templatesFS})`, and put the cards under `templates/og`.",
+  "setup": "Cards are drawn from HTML templates in an `fs.FS`: in `plugins.go`, fill `Options.Templates` — `ogimage.New(ogimage.Options{Templates: templatesFS})` — and put the cards under `templates/og`. The application needs an origin: `BASE_URL`, or an origin resolver such as elagoht/tenant.",
   "config": {
     "type": "object",
     "description": "A collage plugin that draws each page's share card — the image a link is shown with on X, LinkedIn, Slack and in messengers — from an HTML template, in pure Go, and serves it at a URL made from its content.",
@@ -32,7 +32,7 @@
             },
             "file": {
               "type": "string",
-              "description": "File is the TrueType or OpenType file's path in Config.FontFiles."
+              "description": "File is the TrueType or OpenType file's path in Options.FontFiles."
             },
             "style": {
               "type": "string",
@@ -55,31 +55,23 @@
       },
       "maxBytes": {
         "type": "integer",
-        "description": "MaxBytes caps the bytes of cards kept. Zero means DefaultMaxBytes; a negative value means unlimited."
+        "description": "MaxBytes caps the bytes of cards kept. Zero means 256 MiB (268435456); a negative value is an error. For no practical limit, write a large number."
       },
       "maxEntries": {
         "type": "integer",
-        "description": "MaxEntries caps how many cards are kept. Zero means DefaultMaxEntries; a negative value means unlimited."
+        "description": "MaxEntries caps how many cards are kept, and how many pages Recorded remembers. Zero means 10000; a negative value is an error. For a store with no practical limit, write a large number."
       },
       "prefix": {
         "type": "string",
         "description": "Prefix is the URL prefix cards are served under. Defaults to \"/_og/\"."
       },
       "renderTimeout": {
-        "description": "RenderTimeout is how long one card may take to draw, including fetching its images. Zero means DefaultRenderTimeout.",
-        "anyOf": [
-          {
-            "type": "string",
-            "pattern": "^(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+$",
-            "examples": [
-              "30s",
-              "5m"
-            ]
-          },
-          {
-            "type": "integer",
-            "description": "nanoseconds"
-          }
+        "type": "string",
+        "description": "RenderTimeout is how long one card may take to draw, including fetching its images, written as a string: \"5s\". Zero means 5 seconds.",
+        "pattern": "^(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+$",
+        "examples": [
+          "30s",
+          "5m"
         ]
       },
       "root": {

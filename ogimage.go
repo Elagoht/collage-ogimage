@@ -20,16 +20,18 @@ import (
 // Name is the plugin's name, and the key of its plugin configuration.
 const Name = "elagoht/ogimage"
 
-// ErrNoBaseURL is returned by Init without the application's Config.BaseURL:
-// networks follow only absolute og:image URLs.
-var ErrNoBaseURL = errors.New("ogimage: the application's Config.BaseURL is required: og:image URLs are absolute")
+// ErrNoBaseURL is returned by Init when the application has no origin to make
+// og:image URLs absolute against — no Config.BaseURL and no plugin implementing
+// collage.OriginResolver: networks follow only absolute og:image URLs.
+var ErrNoBaseURL = errors.New("ogimage: no origin: set Config.BaseURL (BASE_URL) or register an OriginResolver plugin; og:image URLs are absolute")
 
 // Plugin draws and serves share cards.
 type Plugin struct {
-	cfg Config
+	cfg Options
 
 	devMode    bool
 	baseURL    string
+	locale     string
 	log        *slog.Logger
 	renderer   *renderer
 	store      *store
@@ -41,38 +43,37 @@ type Plugin struct {
 	mu       sync.Mutex
 	inflight map[string]*drawCall
 
-	// What renders recorded: the card of each page path, the cards a static
+	// What renders recorded: the card of each page path (at most MaxEntries
+	// paths, the oldest dropped first, in recordedOrder), the cards a static
 	// build's pages hold, and in development how many cards each path made.
-	recorded map[string]RecordedCard
-	built    map[string]bool
-	perPage  map[string]map[string]bool
+	recorded      map[string]RecordedCard
+	recordedOrder []string
+	built         map[string]bool
+	perPage       map[string]map[string]bool
 }
 
-// New returns a plugin configured entirely from the application's plugin
-// configuration. Templates has no JSON form, so a plugin built with New and no
-// configuration is refused at startup with ErrNoTemplates: use NewWith.
-func New() *Plugin { return &Plugin{} }
-
-// NewWith returns a plugin with cfg as its starting point, which the
-// application's own configuration is decoded over: a key the JSON has replaces
-// the field entirely, and a key it lacks leaves cfg's value.
+// New returns a plugin with opts as its starting point, which the
+// application's plugin configuration is decoded over: a key the JSON has
+// replaces the field entirely, and a key it lacks leaves opts' value.
+// Templates has no JSON form, so it is set here; without it the application is
+// refused at startup with ErrNoTemplates.
 //
 // The slices and maps are copied, because encoding/json decodes into the ones it
 // finds, and would otherwise write the JSON's values into the caller's.
-func NewWith(cfg Config) *Plugin {
-	cfg.ImageOrigins = slices.Clone(cfg.ImageOrigins)
-	cfg.Fonts = slices.Clone(cfg.Fonts)
-	cfg.Files = maps.Clone(cfg.Files)
-	return &Plugin{cfg: cfg}
+func New(opts Options) *Plugin {
+	opts.ImageOrigins = slices.Clone(opts.ImageOrigins)
+	opts.Fonts = slices.Clone(opts.Fonts)
+	opts.Files = maps.Clone(opts.Files)
+	return &Plugin{cfg: opts}
 }
 
 // Name returns Name.
 func (p *Plugin) Name() string { return Name }
 
 // Version returns the plugin's release.
-func (p *Plugin) Version() string { return "0.2.4" }
+func (p *Plugin) Version() string { return "0.3.0" }
 
-// Configure decodes the plugin configuration over the plugin's Config, fills its
+// Configure decodes the plugin configuration over the plugin's Options, fills its
 // defaults and validates it.
 func (p *Plugin) Configure(_ context.Context, host collage.ConfigHost) error {
 	cfg, err := collage.PluginConfig(host, p.cfg)
@@ -95,15 +96,11 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	}
 	p.log = host.Logger()
 	p.devMode = host.DevMode()
-	p.baseURL = strings.TrimSuffix(host.BaseURL(), "/")
-	if p.baseURL == "" && !canResolve(host) {
-		return fmt.Errorf("%w, got %q", ErrNoBaseURL, p.baseURL)
+	p.baseURL = host.BaseURL()
+	if p.baseURL == "" && !host.MultiOrigin() {
+		return ErrNoBaseURL
 	}
-	if p.baseURL != "" {
-		if u, err := url.Parse(p.baseURL); err != nil || u.Host == "" {
-			return fmt.Errorf("%w, got %q", ErrNoBaseURL, p.baseURL)
-		}
-	}
+	p.locale, _ = host.Locales()
 
 	var err error
 	if p.renderer, err = newRenderer(p.cfg); err != nil {
@@ -154,9 +151,6 @@ func (p *Plugin) OnBeforeRender(_ context.Context, ev *collage.BeforeRenderEvent
 		return nil
 	}
 	canonical := collage.BaseURL(rc)
-	if canonical == "" {
-		canonical = p.baseURL
-	}
 	st := &renderState{plugin: p, locale: rc.Locale, origin: canonical, site: p.siteFor(canonical), cards: map[string]RecordedCard{}}
 	if rc.Request != nil {
 		st.path = rc.Request.URL.Path
@@ -205,7 +199,7 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 		return nil
 	}
 	p.mu.Lock()
-	p.recorded[st.path] = rec
+	p.remember(st.path, rec)
 	if ev.Static {
 		p.built[hash] = true
 	}
@@ -222,7 +216,7 @@ func (p *Plugin) origin(r *http.Request, canonical string) string {
 		return canonical
 	}
 	scheme := "http"
-	if r.TLS != nil {
+	if collage.IsHTTPS(r) {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
@@ -230,12 +224,28 @@ func (p *Plugin) origin(r *http.Request, canonical string) string {
 
 // Recorded returns the card the page at path carried on its last render: its
 // template, its Card, its HTML and its URL. It is for a test that a page sets
-// the card it should.
+// the card it should. It remembers the last MaxEntries paths that recorded a
+// card; the oldest is forgotten first, so a crawler inventing URLs cannot grow
+// it without bound.
 func (p *Plugin) Recorded(path string) (RecordedCard, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	rec, ok := p.recorded[path]
 	return rec, ok
+}
+
+// remember notes rec as path's card, forgetting the oldest path past
+// MaxEntries. The caller holds p.mu.
+func (p *Plugin) remember(path string, rec RecordedCard) {
+	if _, ok := p.recorded[path]; !ok {
+		limit := max(p.cfg.MaxEntries, 1)
+		for len(p.recordedOrder) >= limit {
+			delete(p.recorded, p.recordedOrder[0])
+			p.recordedOrder = p.recordedOrder[1:]
+		}
+		p.recordedOrder = append(p.recordedOrder, path)
+	}
+	p.recorded[path] = rec
 }
 
 // noteCard counts, in development, the distinct cards a page records, and warns
@@ -272,11 +282,11 @@ func fontsDigest(data [][]byte) []byte {
 	return h.Sum(nil)
 }
 
-// siteFor is the SiteInfo a card is drawn with, for the site at origin: the
+// siteFor is the siteInfo a card is drawn with, for the site at origin: the
 // canonical origin, never development's request origin, so a card's hash does not
 // change between localhost and the live site.
-func (p *Plugin) siteFor(origin string) SiteInfo {
-	s := SiteInfo{Name: p.cfg.SiteName, URL: origin}
+func (p *Plugin) siteFor(origin string) siteInfo {
+	s := siteInfo{Name: p.cfg.SiteName, URL: origin}
 	if u, err := url.Parse(origin); err == nil {
 		s.Host = u.Host
 	}
@@ -284,14 +294,4 @@ func (p *Plugin) siteFor(origin string) SiteInfo {
 		s.Name = s.Host
 	}
 	return s
-}
-
-// canResolve reports whether collage can name an origin without the plugin's
-// own BaseURL: from Config.BaseURL, or per host from a plugin implementing
-// collage.OriginResolver.
-func canResolve(host collage.Host) bool {
-	if host.BaseURL() != "" {
-		return true
-	}
-	return host.MultiOrigin()
 }

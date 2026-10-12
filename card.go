@@ -26,16 +26,16 @@ const engineVersion = "ogimage/1"
 // ErrUnknownTemplate is a name passed to Set that is no card template.
 var ErrUnknownTemplate = errors.New("ogimage: no such card template")
 
-// SiteInfo is what a card template reads as .Site.
-type SiteInfo struct {
-	// Name is Config.SiteName, or the host of the application's BaseURL.
+// siteInfo is what a card template reads as .Site.
+type siteInfo struct {
+	// Name is Options.SiteName, or the host of the application's BaseURL.
 	Name string
 	// URL is the application's BaseURL; Host its host.
 	URL, Host string
 }
 
-// PageInfo is what a card template reads as .Page.
-type PageInfo struct {
+// pageInfo is what a card template reads as .Page.
+type pageInfo struct {
 	// Path is the request's path, and Locale the page's.
 	Path, Locale string
 }
@@ -44,8 +44,8 @@ type PageInfo struct {
 // .Site and .Page.
 type cardData struct {
 	Card
-	Site SiteInfo
-	Page PageInfo
+	Site siteInfo
+	Page pageInfo
 }
 
 // renderState is the plugin's, on a render: put there by OnBeforeRender with
@@ -57,8 +57,8 @@ type renderState struct {
 	// origin is what card URLs are absolute against: the application's
 	// BaseURL, or in development the request's own origin.
 	origin string
-	// site is the SiteInfo cards are drawn with, from the canonical origin.
-	site SiteInfo
+	// site is the siteInfo cards are drawn with, from the canonical origin.
+	site siteInfo
 
 	mu       sync.Mutex
 	cards    map[string]RecordedCard // by hash, every card this render recorded
@@ -146,13 +146,13 @@ func cardTags(rec RecordedCard) [][2]string {
 
 // record executes a card template, validates what it produced, and records it,
 // at a URL absolute against origin.
-func (p *Plugin) record(tmpl string, card Card, site SiteInfo, origin, pagePath, locale string) (RecordedCard, error) {
+func (p *Plugin) record(tmpl string, card Card, site siteInfo, origin, pagePath, locale string) (RecordedCard, error) {
 	t, err := p.template(tmpl)
 	if err != nil {
 		return RecordedCard{}, err
 	}
 	var b bytes.Buffer
-	data := cardData{Card: card, Site: site, Page: PageInfo{Path: pagePath, Locale: locale}}
+	data := cardData{Card: card, Site: site, Page: pageInfo{Path: pagePath, Locale: locale}}
 	if err := t.Execute(&b, data); err != nil {
 		return RecordedCard{}, fmt.Errorf("ogimage: %s: %w", tmpl, err)
 	}

@@ -29,7 +29,7 @@ func (p *Plugin) OnBuildFinished(ctx context.Context, ev *collage.BuildFinishedE
 	for _, h := range hashes {
 		body, err := p.image(ctx, h)
 		if err != nil {
-			ev.Error(p.cfg.Prefix+h+".png", "ogimage", "the card could not be drawn: "+err.Error())
+			ev.Error(p.cfg.Prefix+h+".png", "ogimage-draw", "the card could not be drawn: "+err.Error())
 			continue
 		}
 		if err := os.WriteFile(filepath.Join(dir, h+".png"), body, 0o644); err != nil {

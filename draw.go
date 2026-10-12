@@ -7,6 +7,7 @@ import (
 	"image"
 	"io/fs"
 	"sync"
+	"time"
 
 	"github.com/Elagoht/collage-ogimage/internal/css"
 	"github.com/Elagoht/collage-ogimage/internal/dom"
@@ -28,7 +29,7 @@ type renderer struct {
 	digest []byte
 }
 
-func newRenderer(cfg Config) (*renderer, error) {
+func newRenderer(cfg Options) (*renderer, error) {
 	var faces []text.Face
 	var all [][]byte
 	for _, f := range cfg.Fonts {
@@ -55,15 +56,25 @@ func newRenderer(cfg Config) (*renderer, error) {
 }
 
 // Draw draws card HTML — one root element, in the subset of DESIGN.md §6 — with
-// cfg's fonts and image sources, and returns the image. It is the renderer the
+// opts' fonts and image sources, and returns the image. It is the renderer the
 // plugin serves cards with, for golden tests and for designing a card without a
-// site; cfg needs no Templates for it.
-func Draw(cfg Config, html string) (image.Image, error) {
-	r, err := newRenderer(cfg.withDefaults())
+// site; opts needs no Templates for it.
+//
+// locale is the one text-transform follows, as the page's does on the site: "tr"
+// uppercases i as İ. Empty draws as "en" does. The draw, its images' fetches
+// included, keeps to opts.RenderTimeout (5 seconds when zero) and to ctx.
+func Draw(ctx context.Context, opts Options, locale, html string) (image.Image, error) {
+	opts = opts.withDefaults()
+	if err := opts.validateDrawing(); err != nil {
+		return nil, err
+	}
+	r, err := newRenderer(opts)
 	if err != nil {
 		return nil, err
 	}
-	return r.draw(context.Background(), html, "en")
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(opts.RenderTimeout))
+	defer cancel()
+	return r.draw(ctx, html, locale)
 }
 
 // draw is the pipeline: parse, load the images the card names, lay out, paint.

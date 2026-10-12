@@ -9,7 +9,7 @@ How it works, and why, is [DESIGN.md](DESIGN.md).
 ```go
 app, err := collage.New(&collage.Config{
 	BaseURL: "https://example.com",
-	Plugins: []collage.Plugin{ogimage.NewWith(ogimage.Config{
+	Plugins: []collage.Plugin{ogimage.New(ogimage.Options{
 		Templates: templatesFS,
 		Root:      "templates",
 		Default:   "og/default.html",
@@ -17,7 +17,7 @@ app, err := collage.New(&collage.Config{
 })
 ```
 
-Requires collage v0.50.0 or later. The site's `Config.BaseURL` is required,
+Requires collage v0.61.0 or later. The site's `Config.BaseURL` is required,
 unless a plugin implementing `collage.OriginResolver` (elagoht/tenant) names each
 host's origin: networks only follow absolute `og:image` URLs.
 
@@ -36,6 +36,7 @@ host's origin: networks only follow absolute `og:image` URLs.
 - [Security](#security)
 - [Configuration](#configuration)
 - [Limitations](#limitations)
+- [Changed in v0.3.0](#changed-in-v030)
 
 ## Why
 
@@ -93,7 +94,7 @@ A template sees:
 | --- | --- |
 | `.Title`, `.Description`, `.Label`, `.Image` | the page's `ogimage.Card` |
 | `.Fields.<name>` | the card's extra values, by name |
-| `.Site.Name`, `.Site.URL`, `.Site.Host` | the site, from `Config.SiteName` and `Config.BaseURL` |
+| `.Site.Name`, `.Site.URL`, `.Site.Host` | the site, from `Options.SiteName` and the application's `Config.BaseURL` |
 | `.Page.Path`, `.Page.Locale` | the page the card is for |
 
 ## Setting a page's card
@@ -160,7 +161,7 @@ be the image, before it for meta's `Image` to be. Register ogimage **after** met
 
 ## The default card
 
-Name a template in `Config.Default` and every page that sets no card of its own
+Name a template in `Options.Default` and every page that sets no card of its own
 gets one, drawn from its `<title>` as `.Title` and its meta description as
 `.Description`:
 
@@ -264,9 +265,9 @@ not something the renderer can see.
 
 An `<img src>` or a `background: url()` can be:
 
-- **a file of the site**, under a prefix in `Config.Files` — `/static/logo.png`
+- **a file of the site**, under a prefix in `Options.Files` — `/static/logo.png`
   read straight from the mapped `fs.FS`, with no request made;
-- **a remote image** whose origin is in `Config.ImageOrigins` — a CMS cover, say —
+- **a remote image** whose origin is in `Options.ImageOrigins` — a CMS cover, say —
   fetched when the card is drawn, with a timeout and a size cap;
 - **a `data:` URL** of a PNG, JPEG or WebP.
 
@@ -318,26 +319,33 @@ output, and a card that fails to draw fails the build.
   on its last render, beside the page, and refreshes itself every few seconds.
   Open a page, then the preview; edit a card template and reload the page.
 - **Draw one without the site.** `go run . ogimage og/post.html card.json > card.png`
-  draws a template with the `Card` in `card.json` (`{"title": "…", "label": "…"}`).
+  draws a template with the `Card` in `card.json` (`{"title": "…", "label": "…"}`),
+  in the application's default locale; `ogimage -locale tr og/post.html card.json`
+  draws it in another. It keeps to `RenderTimeout`, as a served card does.
 - **Check in a browser.** Open the template's HTML in a browser with sample text in
   place of `{{…}}`: inside the subset, it looks the same.
 
 ## Testing
 
 ```go
-img, err := ogimage.Draw(cfg, `<div style="width:1200px;height:630px;background:#000"></div>`)
+img, err := ogimage.Draw(ctx, opts, "en", `<div style="width:1200px;height:630px;background:#000"></div>`)
 ```
 
-draws card HTML directly, for golden-image tests, and
+draws card HTML directly, for golden-image tests: with `opts`' fonts and image
+sources (it needs no `Templates`), in the locale given — `"tr"` uppercases `i` as
+`İ` — and within `RenderTimeout`. Options it cannot draw with are
+`ErrInvalidConfig`. And
 
 ```go
-og := ogimage.NewWith(cfg)        // the plugin the test's application is built with
+og := ogimage.New(opts)           // the plugin the test's application is built with
 // ... request /blogs/hello-world
 card, ok := og.Recorded("/blogs/hello-world")
 ```
 
 returns the card a page recorded on its last render — its template, its `Card`,
-its HTML and its URL — for a test that a page sets the card it should.
+its HTML and its URL — for a test that a page sets the card it should. It
+remembers the last `MaxEntries` pages that recorded a card, so it stays bounded
+in production.
 
 ## Security
 
@@ -372,10 +380,13 @@ one it did not decide on:
 | `Fonts`, `FontFiles` | Go fonts | the fonts cards are drawn in, and the `fs.FS` their files are in |
 | `Dir` | memory only | where cards and their specs are kept across restarts |
 | `Prefix` | `"/_og/"` | the URL prefix cards are served under |
-| `MaxEntries` | `10000` | how many cards are kept; negative for unlimited |
-| `MaxBytes` | `256 MiB` | how many bytes of cards are kept; negative for unlimited |
+| `MaxEntries` | `10000` | how many cards are kept, and how many pages `Recorded` remembers; a negative value is an error |
+| `MaxBytes` | `256 MiB` | how many bytes of cards are kept; a negative value is an error |
 | `Workers` | half the CPUs, at least 1 | cards drawn at once |
-| `RenderTimeout` | `5s` | how long one card may take to draw |
+| `RenderTimeout` | `"5s"` | how long one card may take to draw, written as a string |
+
+For a store with no practical limit, write a large `maxEntries` and `maxBytes`.
+An option is `ogimage.Options`, and the plugin is `ogimage.New(opts)`.
 
 Everything but the `fs.FS` fields can also come from the plugin configuration:
 
@@ -386,7 +397,8 @@ Everything but the `fs.FS` fields can also come from the plugin configuration:
     "siteName": "Example",
     "imageOrigins": ["https://cms.example.com"],
     "dir": ".cache/ogimage",
-    "maxEntries": 10000
+    "maxEntries": 10000,
+    "renderTimeout": "5s"
   }
 }
 ```
@@ -401,3 +413,23 @@ Everything but the `fs.FS` fields can also come from the plugin configuration:
 - The default card reads the title and description from the rendered head, so a
   page that writes them some other way than `<title>` and
   `<meta name="description">` gets an empty one.
+
+## Changed in v0.3.0
+
+| Before | Now |
+| --- | --- |
+| `ogimage.New()`, `ogimage.NewWith(cfg)` | `ogimage.New(opts)` — one constructor |
+| `ogimage.Config` | `ogimage.Options` |
+| `ogimage.Draw(cfg, html)` | `ogimage.Draw(ctx, opts, locale, html)`: it validates `opts` (fonts with no `FontFiles` are `ErrInvalidConfig`, not a panic), keeps to `RenderTimeout`, and draws in `locale` |
+| `ogimage.Duration` | `collage.Duration`: `"renderTimeout": "5s"`; a number (`5000000000`) is now an error at startup |
+| `"maxEntries"` / `"maxBytes"` negative = unlimited | a negative value is an error at startup; write a large number instead |
+| `DefaultRoot`, `DefaultCardDir`, `DefaultPrefix`, `DefaultMaxEntries`, `DefaultMaxBytes`, `DefaultRenderTimeout` | unexported; the defaults are in the table above |
+| `SiteInfo`, `PageInfo` | unexported; templates still read `.Site.Name`, `.Site.URL`, `.Site.Host`, `.Page.Path`, `.Page.Locale` |
+| build finding code `ogimage` | `ogimage-draw` |
+| `Recorded` kept every page that ever recorded a card | it keeps the last `MaxEntries` pages |
+| `ogimage <template> [card.json]` drew in `en` | it draws in the default locale, or `-locale <locale>` |
+| an `imageOrigins` entry with userinfo (`https://u@cms.example.com`), a fragment, or no host (`https://:8080`) was accepted | refused at startup, as `collage.ParseOrigin` refuses it |
+| in development, a card URL's scheme was `https` only for a TLS connection | it follows `collage.IsHTTPS`: TLS, or `X-Forwarded-Proto: https` from `Server.TrustedProxies` (from anyone when none are listed) |
+
+`ErrNoTemplates` now names `Options.Templates`, and `ErrNoBaseURL` says where an
+origin comes from: `Config.BaseURL` (`BASE_URL`) or an origin resolver.

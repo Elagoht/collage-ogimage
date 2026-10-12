@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -48,28 +49,47 @@ type site struct {
 	sets *atomic.Int32
 }
 
+// siteWith is a started application with og on the test templates, the edit
+// applied to its configuration, and items registered — collagetest's Site with
+// no home page.
+func siteWith(t *testing.T, plugins []collage.Plugin, edit func(*collage.Config), items ...collage.Registrable) *collagetest.Site {
+	t.Helper()
+	return collagetest.NewSite(t, siteOptions(plugins, edit, items...)...)
+}
+
+func siteOptions(plugins []collage.Plugin, edit func(*collage.Config), items ...collage.Registrable) []collagetest.SiteOption {
+	return []collagetest.SiteOption{
+		collagetest.WithoutHome(),
+		collagetest.WithPlugins(plugins...),
+		collagetest.WithRegister(items...),
+		collagetest.WithConfig(func(c *collage.Config) {
+			c.Template.FS = templates
+			if edit != nil {
+				edit(c)
+			}
+		}),
+	}
+}
+
+func onExample(c *collage.Config) { c.BaseURL = "https://example.com" }
+
+func layoutFragment() *collage.Fragment { return collage.NewFragment("layout", "layout.html").Build() }
+
 // newSite is an application with three pages: one that sets its card, one that
 // sets none and gets the default, and one whose cover elagoht/meta declares.
 func newSite(t *testing.T, dir string, extra ...collage.Plugin) *site {
 	t.Helper()
-	og := NewWith(Config{Templates: templates, Root: "t", Default: "og/default.html", Dir: dir})
+	og := New(Options{Templates: templates, Root: "t", Default: "og/default.html", Dir: dir})
 	sets := &atomic.Int32{}
-	app, err := collage.New(&collage.Config{
-		BaseURL:  "https://example.com",
-		Template: collage.TemplateConfig{FS: templates, Root: "t"},
-		Cache:    collage.CacheConfig{Enabled: true, Type: "memory", DefaultTTL: time.Hour},
-		Plugins:  append(extra, og),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	layout := func() *collage.Fragment { return collage.NewFragment("layout", "layout.html").Build() }
 	page := func(name, path string, data collage.Data) *collage.Page {
-		return collage.NewPage(name).WithLayouts(layout()).
+		return collage.NewPage(name).WithLayouts(layoutFragment()).
 			WithContent(collage.NewFragment(name+"-content", "page.html").WithData(data).Build()).
 			WithPath("en", path).Incremental(time.Hour).Build()
 	}
-	err = app.Register(
+	s := siteWith(t, append(extra, og), func(c *collage.Config) {
+		onExample(c)
+		c.Cache = collage.CacheConfig{Enabled: true, Type: "memory", DefaultTTL: time.Hour}
+	},
 		page("post", "/post", collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 			sets.Add(1)
 			rc.HoistTitle("A post")
@@ -85,10 +105,7 @@ func newSite(t *testing.T, dir string, extra ...collage.Plugin) *site {
 			return "covered", nil
 		})),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &site{app: app, og: og, sets: sets}
+	return &site{app: s.App, og: og, sets: sets}
 }
 
 var ogImage = regexp.MustCompile(`<meta property="og:image" content="([^"]+)">`)
@@ -123,27 +140,18 @@ func (origins) Origin(_ context.Context, host string) (string, bool) {
 // and no Config.BaseURL.
 func hostSite(t *testing.T) http.Handler {
 	t.Helper()
-	og := NewWith(Config{Templates: templates, Root: "t", Default: "og/default.html"})
-	app, err := collage.New(&collage.Config{
-		Template: collage.TemplateConfig{FS: templates, Root: "t"},
-		Cache:    collage.CacheConfig{Enabled: true, Type: "memory", DefaultTTL: time.Hour},
-		Plugins:  []collage.Plugin{origins{}, og},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	layout := collage.NewFragment("layout", "layout.html").Build()
-	about := collage.NewPage("about").WithLayouts(layout).
+	og := New(Options{Templates: templates, Root: "t", Default: "og/default.html"})
+	about := collage.NewPage("about").WithLayouts(layoutFragment()).
 		WithContent(collage.NewFragment("about-content", "page.html").WithData(
 			collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 				rc.HoistTitle("About me")
 				return "about", nil
 			})).Build()).
 		WithPath("en", "/about").Incremental(time.Hour).Build()
-	if err := app.Register(about); err != nil {
-		t.Fatal(err)
-	}
-	return app.Handler()
+	s := siteWith(t, []collage.Plugin{origins{}, og}, func(c *collage.Config) {
+		c.Cache = collage.CacheConfig{Enabled: true, Type: "memory", DefaultTTL: time.Hour}
+	}, about)
+	return s.App.Handler()
 }
 
 // Without Config.BaseURL, a card's URL follows the request's origin.
@@ -312,27 +320,16 @@ func TestABrokenTemplateRefusesToStart(t *testing.T) {
 		"t/layout.html": {Data: []byte(`<html><head>{{hoist "head"}}</head><body>{{slot "content"}}</body></html>`)},
 		"t/og/bad.html": {Data: []byte("<div style=\"display:flex\">\n  <div style=\"position:absolute\">x</div>\n</div>")},
 	}
-	app, err := collage.New(&collage.Config{
-		BaseURL:  "https://example.com",
-		Template: collage.TemplateConfig{FS: bad, Root: "t"},
-		Plugins:  []collage.Plugin{NewWith(Config{Templates: bad, Root: "t"})},
-	})
-	if err == nil {
-		err = app.Start()
-	}
+	_, err := collagetest.TrySite(t, collagetest.WithoutHome(),
+		collagetest.WithPlugins(New(Options{Templates: bad, Root: "t"})),
+		collagetest.WithConfig(func(c *collage.Config) { onExample(c); c.Template.FS = bad }))
 	if !errors.Is(err, ErrUnsupported) || !strings.Contains(err.Error(), "og/bad.html:2:") {
 		t.Errorf("start = %v, want og/bad.html:2: ... ErrUnsupported", err)
 	}
 }
 
 func TestTheApplicationNeedsABaseURL(t *testing.T) {
-	app, err := collage.New(&collage.Config{
-		Template: collage.TemplateConfig{FS: templates, Root: "t"},
-		Plugins:  []collage.Plugin{NewWith(Config{Templates: templates, Root: "t"})},
-	})
-	if err == nil {
-		err = app.Start()
-	}
+	_, err := collagetest.TrySite(t, siteOptions([]collage.Plugin{New(Options{Templates: templates, Root: "t"})}, nil)...)
 	if !errors.Is(err, ErrNoBaseURL) {
 		t.Errorf("start = %v, want ErrNoBaseURL", err)
 	}
@@ -347,9 +344,6 @@ func TestSetWithoutThePlugin(t *testing.T) {
 
 func TestTheCommandDrawsACard(t *testing.T) {
 	s := newSite(t, "")
-	if err := s.app.Start(); err != nil {
-		t.Fatal(err)
-	}
 	cardJSON := filepath.Join(t.TempDir(), "card.json")
 	_ = os.WriteFile(cardJSON, []byte(`{"title":"From the command","label":"CLI"}`), 0o644)
 	old := os.Stdout
@@ -368,19 +362,29 @@ func TestTheCommandDrawsACard(t *testing.T) {
 	}
 }
 
+func TestTheCommandTakesALocale(t *testing.T) {
+	s := newSite(t, "")
+	cmd := s.og.command()
+	for _, args := range [][]string{{"-locale"}, {"-locale", "tr"}} {
+		if err := cmd.Run(context.Background(), args); err == nil {
+			t.Errorf("%q: accepted with no template", args)
+		}
+	}
+	old := os.Stdout
+	os.Stdout, _ = os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	err := cmd.Run(context.Background(), []string{"-locale", "tr", "og/post.html"})
+	os.Stdout.Close()
+	os.Stdout = old
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Sibling fragments' handlers run concurrently, and both set a card: the page's
 // card is the one its head ends up with, by collage's hoist rules, every time
 // (DESIGN.md §15.3).
 func TestSiblingCardsResolveByTheHead(t *testing.T) {
-	og := NewWith(Config{Templates: templates, Root: "t"})
-	app, err := collage.New(&collage.Config{
-		BaseURL:  "https://example.com",
-		Template: collage.TemplateConfig{FS: templates, Root: "t"},
-		Plugins:  []collage.Plugin{og},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	og := New(Options{Templates: templates, Root: "t"})
 	part := func(name, title string) *collage.Fragment {
 		return collage.NewInlineFragment(name, `<i>{{.}}</i>`).WithData(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 			return name, Set(rc, "og/post.html", Card{Title: title})
@@ -388,11 +392,8 @@ func TestSiblingCardsResolveByTheHead(t *testing.T) {
 	}
 	content := collage.NewInlineFragment("both", `<div>{{slot "a"}}{{slot "b"}}</div>`).
 		WithSlotFragment("a", part("a", "First")).WithSlotFragment("b", part("b", "Second")).Build()
-	if err := app.RegisterPage(collage.NewPage("both").WithLayouts(collage.NewFragment("layout", "layout.html").Build()).
-		WithContent(content).WithPath("en", "/both").Dynamic().Build()); err != nil {
-		t.Fatal(err)
-	}
-	h := app.Handler()
+	h := siteWith(t, []collage.Plugin{og}, onExample, collage.NewPage("both").WithLayouts(layoutFragment()).
+		WithContent(content).WithPath("en", "/both").Dynamic().Build()).App.Handler()
 	var first string
 	for range 20 {
 		page := collagetest.New(t, h).Get("/both").Body
@@ -418,23 +419,15 @@ func TestDevelopment(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(dir, name), f.Data, 0o644)
 	}
 	disk := os.DirFS(dir)
-	og := NewWith(Config{Templates: disk, Root: "t"})
-	app, err := collage.New(&collage.Config{
-		DevMode:  true,
-		BaseURL:  "https://example.com",
-		Template: collage.TemplateConfig{FS: disk, Root: "t"},
-		Plugins:  []collage.Plugin{og},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := app.RegisterPage(collage.NewPage("p").WithLayouts(collage.NewFragment("layout", "layout.html").Build()).
+	og := New(Options{Templates: disk, Root: "t"})
+	c := siteWith(t, []collage.Plugin{og}, func(c *collage.Config) {
+		onExample(c)
+		c.DevMode = true
+		c.Template.FS = disk
+	}, collage.NewPage("p").WithLayouts(layoutFragment()).
 		WithContent(collage.NewFragment("c", "page.html").WithData(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
 			return "x", Set(rc, "og/post.html", Card{Title: "Live"})
-		})).Build()).WithPath("en", "/p").Dynamic().Build()); err != nil {
-		t.Fatal(err)
-	}
-	c := collagetest.New(t, app.Handler())
+		})).Build()).WithPath("en", "/p").Dynamic().Build()).Client
 	before := cardURL(t, c.Get("/p").Body)
 	_ = os.WriteFile(filepath.Join(dir, "t/og/post.html"), []byte(strings.Replace(testPostCard, "#0f172a", "#7c3aed", 1)), 0o644)
 	after := cardURL(t, c.Get("/p").Body)
@@ -453,20 +446,12 @@ func TestDevelopment(t *testing.T) {
 func TestDevelopmentCardsAreServedFromTheRequestsOrigin(t *testing.T) {
 	hashes := map[bool]string{}
 	for _, dev := range []bool{false, true} {
-		og := NewWith(Config{Templates: templates, Root: "t", Default: "og/post.html"})
-		app, err := collage.New(&collage.Config{
-			DevMode:  dev,
-			BaseURL:  "https://example.com",
-			Template: collage.TemplateConfig{FS: templates, Root: "t"},
-			Plugins:  []collage.Plugin{og},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := app.RegisterPage(collage.NewPage("p").WithLayouts(collage.NewFragment("layout", "layout.html").Build()).
-			WithContent(collage.NewFragment("c", "page.html").Build()).WithPath("en", "/p").Dynamic().Build()); err != nil {
-			t.Fatal(err)
-		}
+		og := New(Options{Templates: templates, Root: "t", Default: "og/post.html"})
+		app := siteWith(t, []collage.Plugin{og}, func(c *collage.Config) {
+			onExample(c)
+			c.DevMode = dev
+		}, collage.NewPage("p").WithLayouts(layoutFragment()).
+			WithContent(collage.NewFragment("c", "page.html").Build()).WithPath("en", "/p").Dynamic().Build()).App
 		req := httptest.NewRequest(http.MethodGet, "http://localhost:3000/p", nil)
 		rec := httptest.NewRecorder()
 		app.Handler().ServeHTTP(rec, req)
@@ -492,5 +477,48 @@ func TestDevelopmentCardsAreServedFromTheRequestsOrigin(t *testing.T) {
 	}
 	if hashes[false] != hashes[true] {
 		t.Errorf("the card's hash depends on the origin: %s and %s", hashes[false], hashes[true])
+	}
+}
+
+// Recorded remembers at most MaxEntries pages: a crawler inventing URLs under a
+// pattern page, each given the default card, cannot grow it without bound.
+func TestRecordedIsCapped(t *testing.T) {
+	og := New(Options{Templates: templates, Root: "t", Default: "og/default.html", MaxEntries: 2})
+	site := siteWith(t, []collage.Plugin{og}, onExample, collage.NewPage("p").WithLayouts(layoutFragment()).
+		WithContent(collage.NewFragment("c", "page.html").Build()).WithPath("en", "/p/{slug}").Dynamic().Build())
+	for i := range 5 {
+		site.Get(fmt.Sprintf("/p/%d", i)).WantStatus(http.StatusOK)
+	}
+	og.mu.Lock()
+	n := len(og.recorded)
+	og.mu.Unlock()
+	if n != 2 {
+		t.Errorf("%d paths recorded, want the cap, 2", n)
+	}
+	if _, ok := og.Recorded("/p/4"); !ok {
+		t.Error("the newest path was forgotten")
+	}
+	if _, ok := og.Recorded("/p/0"); ok {
+		t.Error("the oldest path was kept past the cap")
+	}
+}
+
+// What plugins-config.json may not say: a duration as a number, a negative cap.
+func TestConfigurationRefusals(t *testing.T) {
+	for name, raw := range map[string]string{
+		"number renderTimeout": `{"renderTimeout": 5000000000}`,
+		"negative maxEntries":  `{"maxEntries": -1}`,
+		"negative maxBytes":    `{"maxBytes": -1}`,
+	} {
+		opts := append(siteOptions([]collage.Plugin{New(Options{Templates: templates, Root: "t"})}, onExample),
+			collagetest.WithPluginConfig(Name, raw))
+		if _, err := collagetest.TrySite(t, opts...); err == nil {
+			t.Errorf("%s: started", name)
+		}
+	}
+	_, err := collagetest.TrySite(t, append(siteOptions([]collage.Plugin{New(Options{Templates: templates, Root: "t"})}, onExample),
+		collagetest.WithPluginConfig(Name, `{"renderTimeout": "2s", "maxEntries": 5}`))...)
+	if err != nil {
+		t.Errorf("a valid configuration: %v", err)
 	}
 }

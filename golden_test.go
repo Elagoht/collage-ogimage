@@ -43,8 +43,8 @@ func testPhoto() []byte {
 	return b.Bytes()
 }
 
-func goldenConfig() Config {
-	return Config{Files: map[string]fs.FS{"/img/": fstest.MapFS{"photo.png": {Data: testPhoto()}}}}
+func goldenConfig() Options {
+	return Options{Files: map[string]fs.FS{"/img/": fstest.MapFS{"photo.png": {Data: testPhoto()}}}}
 }
 
 // Each card in testdata/golden draws the PNG beside it (DESIGN.md §12.3, phase
@@ -59,7 +59,7 @@ func TestGolden(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(card), ".html")
 		t.Run(name, func(t *testing.T) {
 			src, _ := os.ReadFile(card)
-			got, err := Draw(goldenConfig(), string(src))
+			got, err := Draw(t.Context(), goldenConfig(), "en", string(src))
 			if err != nil {
 				t.Fatal(err)
 			}

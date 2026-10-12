@@ -114,7 +114,7 @@ serve the page without its card logs the error and carries on.
 ### 3.3 The application
 
 ```go
-ogimage.NewWith(ogimage.Config{
+ogimage.New(ogimage.Options{
 	Templates: templatesFS,              // the same fs.FS the application parses
 	Root:      "templates",
 	Default:   "og/default.html",        // every page that sets no card
@@ -145,8 +145,8 @@ A template is executed with:
 ```go
 type cardData struct {
 	Card               // promoted: {{.Title}}, {{.Fields.date}}
-	Site SiteInfo      // {{.Site.Name}} (Config.SiteName), {{.Site.URL}}, {{.Site.Host}}
-	Page PageInfo      // {{.Page.Path}}, {{.Page.Locale}}
+	Site siteInfo      // {{.Site.Name}} (Options.SiteName), {{.Site.URL}}, {{.Site.Host}}
+	Page pageInfo      // {{.Page.Path}}, {{.Page.Locale}}
 }
 ```
 
@@ -217,7 +217,7 @@ with (§15.3).
 
 ### 5.3 The default card
 
-A page that calls `Set` nowhere gets `Config.Default`, when it is set, drawn from:
+A page that calls `Set` nowhere gets `Options.Default`, when it is set, drawn from:
 
 - `Title`: the page's `<title>`;
 - `Description`: its `<meta name="description">`;
@@ -368,7 +368,7 @@ Colours are `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()`
 
 | Property | Values |
 | --- | --- |
-| `font-family` | a family registered in `Config.Fonts`, or `sans-serif`, `serif`, `monospace` |
+| `font-family` | a family registered in `Options.Fonts`, or `sans-serif`, `serif`, `monospace` |
 | `font-size` | length |
 | `font-weight` | 100–900, `normal`, `bold` |
 | `font-style` | `normal`, `italic` |
@@ -404,9 +404,9 @@ character is in the template, at render when it came in the data.
 
 `img` and `background: url()` take:
 
-- a path under a prefix in `Config.Files` (`/static/icon.png` read from the mapped
+- a path under a prefix in `Options.Files` (`/static/icon.png` read from the mapped
   `fs.FS` — no request is made to the application itself);
-- an absolute `http(s)` URL whose origin is in `Config.ImageOrigins`, fetched at
+- an absolute `http(s)` URL whose origin is in `Options.ImageOrigins`, fetched at
   render time with a timeout and a size cap (§9);
 - a `data:` URL of a PNG, JPEG or WebP.
 
@@ -530,9 +530,9 @@ The plugin produces images on request, which costs CPU and memory. The model:
    half the CPUs, at least one); one draw is abandoned after `RenderTimeout`
    (default 5 s). Concurrent requests for one card share one draw.
 4. **Images are bounded.** A remote image is fetched only from
-   `Config.ImageOrigins`, with a 5 s timeout, a 10 MB body cap, no redirects to
+   `Options.ImageOrigins`, with a 5 s timeout, a 10 MB body cap, no redirects to
    another origin, and decoded only below 40 megapixels. A local image is read only
-   from `Config.Files`, through an `fs.FS`, never a path joined to a directory.
+   from `Options.Files`, through an `fs.FS`, never a path joined to a directory.
 5. **Templates are the application's.** Card templates are files the application
    ships; nothing a request carries names a template.
 6. **The output is a PNG.** No HTML or SVG is served from the prefix, so a card is
@@ -551,19 +551,21 @@ The plugin produces images on request, which costs CPU and memory. The model:
    properties written literally. An unsupported one is `ErrUnsupported`, wrapped
    with the template, line and column, and the property or element — the
    application does not start.
-4. Loads and parses every font in `Config.Fonts`; a file that is missing or not a
+4. Loads and parses every font in `Options.Fonts`; a file that is missing or not a
    TrueType/OpenType font is an error.
 5. Mounts `Prefix` (default `/_og/`) and, in development, serves `/_og-preview/`.
 6. Registers the `ogimage` command (§11).
 
 ## 11. Tooling
 
-- **Command:** `go run . ogimage <template> [card.json] > card.png` draws a card
-  template with a `Card` decoded from the JSON file (or `{}`), without starting a
+- **Command:** `go run . ogimage [-locale tr] <template> [card.json] > card.png` draws a
+  card template with a `Card` decoded from the JSON file (or `{}`), in the
+  application's default locale or the one `-locale` names, within `RenderTimeout`, without starting a
   server. It is the loop for designing a card, and the way to keep golden images
   in a repository.
-- **Testing:** `ogimage.Draw(cfg, html) (image.Image, error)` draws card HTML
-  directly, for golden tests; `(*Plugin).Recorded(path)` returns the card a page
+- **Testing:** `ogimage.Draw(ctx, opts, locale, html) (image.Image, error)` draws card
+  HTML directly, for golden tests, validating `opts` and keeping to
+  `RenderTimeout`; `(*Plugin).Recorded(path)` returns the card a page
   recorded on its last render — its template, `Card`, HTML and URL — for asserting
   a page sets the card it should. It is a method on the plugin the test built,
   since a `*collage.App` does not hand its plugins out.
@@ -574,7 +576,8 @@ The plugin produces images on request, which costs CPU and memory. The model:
 ### 12.1 Packages
 
 ```
-ogimage.go        Plugin, Config, New/NewWith, Init, hooks, Set
+ogimage.go        Plugin, New, Init, hooks, Recorded
+config.go         Options, Font, defaults and validation
 card.go           Card, cardData, template execution
 store.go          spec and image store: memory index, Dir, caps, eviction
 mount.go          the fs.FS served at Prefix; preview handler

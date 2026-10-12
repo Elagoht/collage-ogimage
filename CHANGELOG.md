@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.3.0
+
+The v1 conventions; requires collage v0.61.0 and, in tests, collage-meta v0.3.0.
+
+- One constructor: `New(opts Options)`. `NewWith` and `New()` are gone, and
+  `Config` is `Options`.
+- `Draw(ctx, opts, locale, html)`: it validates `opts` first (fonts listed with no
+  `FontFiles` panicked; they are `ErrInvalidConfig`), keeps to `RenderTimeout`,
+  image fetches included (it ran on `context.Background`), and draws in the locale
+  given (it was always `en`). The `ogimage` command draws in the application's
+  default locale, or `-locale`, within `RenderTimeout`.
+- `renderTimeout` is a `collage.Duration`: a string such as `"5s"`; a number is an
+  error at startup. `ogimage.Duration` is gone.
+- A negative `maxEntries` or `maxBytes` is an error at startup; it meant unlimited.
+- `Recorded` remembers the last `MaxEntries` pages: every distinct path that
+  recorded a card was kept for the life of the process, so with `default` set,
+  each URL a crawler invented grew it.
+- `Default*` constants, `SiteInfo` and `PageInfo` are unexported.
+- `imageOrigins` is checked with `collage.ParseOrigin`; the development origin's
+  scheme follows `collage.IsHTTPS`.
+- The build finding code is `ogimage-draw`.
+
 ## v0.2.0
 
 - On a site served on several hosts, a card's URL and the `.Site` a template draws

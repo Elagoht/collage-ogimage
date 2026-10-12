@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.0
+
+- `Draw(ctx, opts, Input{HTML: …, Locale: …})`: the card's HTML and locale are
+  fields of `ogimage.Input` instead of two adjacent string arguments
+  (`Draw(ctx, opts, locale, html)`), so passing them swapped no longer compiles.
+  An empty `Locale` still draws as `"en"`.
+
 ## v0.3.0
 
 The v1 conventions; requires collage v0.61.1 and, in tests, collage-meta v0.3.0.

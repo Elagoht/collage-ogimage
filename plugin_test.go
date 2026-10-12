@@ -587,3 +587,65 @@ func TestConfigurationRefusals(t *testing.T) {
 		t.Errorf("a valid configuration: %v", err)
 	}
 }
+
+// A card that cannot be drawn when a static build writes it is the build's
+// ogimage-draw error, at the card's path. A card's HTML is checked when the page
+// sets it, so what fails here is the draw itself: every worker is held, and the
+// card cannot get one within RenderTimeout.
+func TestTheExportReportsACardItCannotDraw(t *testing.T) {
+	og := New(Options{Templates: templates, Root: "t", RenderTimeout: collage.Duration(50 * time.Millisecond)})
+	s := siteWith(t, []collage.Plugin{og}, onExample, collage.NewPage("p").WithLayouts(layoutFragment()).
+		WithContent(collage.NewFragment("c", "page.html").WithData(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
+			return "x", Set(rc, "og/post.html", Card{Title: "Held"})
+		})).Build()).WithPath("en", "/p").Static().Build())
+	for range cap(og.sem) {
+		og.sem <- struct{}{}
+	}
+	t.Cleanup(func() {
+		for range cap(og.sem) {
+			<-og.sem
+		}
+	})
+	report, _ := collage.Build(context.Background(), s.App, collage.BuildOptions{OutDir: t.TempDir()})
+	if report == nil {
+		t.Fatal("Build returned no report")
+	}
+	found := false
+	for _, f := range report.Findings {
+		if f.Rule == "ogimage-draw" && f.Level == collage.FindingError && strings.HasPrefix(f.Path, "/_og/") && strings.HasSuffix(f.Path, ".png") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no ogimage-draw error at the card's path: %+v", report.Findings)
+	}
+}
+
+// In development a card URL's scheme follows collage.IsHTTPS: X-Forwarded-Proto
+// is believed from anyone when no TrustedProxies are listed, and only from one
+// of them when they are.
+func TestDevelopmentCardsFollowIsHTTPS(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		trusted []string
+		want    string
+	}{
+		{"no trusted proxies", nil, "https://localhost:3000/_og/"},
+		{"the peer is not a trusted proxy", []string{"10.0.0.0/8"}, "http://localhost:3000/_og/"},
+	} {
+		og := New(Options{Templates: templates, Root: "t", Default: "og/post.html"})
+		app := siteWith(t, []collage.Plugin{og}, func(cfg *collage.Config) {
+			onExample(cfg)
+			cfg.DevMode = true
+			cfg.Server.TrustedProxies = c.trusted
+		}, collage.NewPage("p").WithLayouts(layoutFragment()).
+			WithContent(collage.NewFragment("c", "page.html").Build()).WithPath("en", "/p").Dynamic().Build()).App
+		req := httptest.NewRequest(http.MethodGet, "http://localhost:3000/p", nil)
+		req.Header.Set("X-Forwarded-Proto", "https")
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		if card := cardURL(t, rec.Body.String()); !strings.HasPrefix(card, c.want) {
+			t.Errorf("%s: og:image = %q, want it under %s", c.name, card, c.want)
+		}
+	}
+}

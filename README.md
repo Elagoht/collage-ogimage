@@ -328,12 +328,15 @@ output, and a card that fails to draw fails the build.
 ## Testing
 
 ```go
-img, err := ogimage.Draw(ctx, opts, "en", `<div style="width:1200px;height:630px;background:#000"></div>`)
+img, err := ogimage.Draw(ctx, opts, ogimage.Input{
+	HTML:   `<div style="width:1200px;height:630px;background:#000"></div>`,
+	Locale: "en",
+})
 ```
 
 draws card HTML directly, for golden-image tests: with `opts`' fonts and image
-sources (it needs no `Templates`), in the locale given — `"tr"` uppercases `i` as
-`İ` — and within `RenderTimeout`. Options it cannot draw with are
+sources (it needs no `Templates`), in `Input.Locale` — `"tr"` uppercases `i` as
+`İ`; empty draws as `"en"` — and within `RenderTimeout`. Options it cannot draw with are
 `ErrInvalidConfig`. And
 
 ```go
@@ -413,6 +416,12 @@ Everything but the `fs.FS` fields can also come from the plugin configuration:
 - The default card reads the title and description from the rendered head, so a
   page that writes them some other way than `<title>` and
   `<meta name="description">` gets an empty one.
+
+## Changed in v0.4.0
+
+| Before | Now |
+| --- | --- |
+| `ogimage.Draw(ctx, opts, locale, html)` | `ogimage.Draw(ctx, opts, ogimage.Input{HTML: html, Locale: locale})`: the two strings are named fields, so swapping them no longer compiles; an empty `Locale` still draws as `"en"` |
 
 ## Changed in v0.3.0
 

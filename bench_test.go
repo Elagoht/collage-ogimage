@@ -17,7 +17,7 @@ func BenchmarkDrawPostCard(b *testing.B) {
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := r.draw(b.Context(), string(src), "en"); err != nil {
+		if _, err := r.draw(b.Context(), Input{HTML: string(src), Locale: "en"}); err != nil {
 			b.Fatal(err)
 		}
 	}

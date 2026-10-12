@@ -55,15 +55,22 @@ func newRenderer(cfg Options) (*renderer, error) {
 	}, nil
 }
 
-// Draw draws card HTML — one root element, in the subset of DESIGN.md §6 — with
-// opts' fonts and image sources, and returns the image. It is the renderer the
-// plugin serves cards with, for golden tests and for designing a card without a
-// site; opts needs no Templates for it.
+// Input is what Draw draws: the card's HTML and the locale it is drawn in.
+type Input struct {
+	// HTML is the card: one root element, in the subset of DESIGN.md §6.
+	HTML string
+	// Locale is the one text-transform follows, as the page's does on the site:
+	// "tr" uppercases i as İ. Empty draws as "en" does.
+	Locale string
+}
+
+// Draw draws in.HTML in in.Locale with opts' fonts and image sources, and
+// returns the image. It is the renderer the plugin serves cards with, for golden
+// tests and for designing a card without a site; opts needs no Templates for it.
 //
-// locale is the one text-transform follows, as the page's does on the site: "tr"
-// uppercases i as İ. Empty draws as "en" does. The draw, its images' fetches
-// included, keeps to opts.RenderTimeout (5 seconds when zero) and to ctx.
-func Draw(ctx context.Context, opts Options, locale, html string) (image.Image, error) {
+// The draw, its images' fetches included, keeps to opts.RenderTimeout (5 seconds
+// when zero) and to ctx.
+func Draw(ctx context.Context, opts Options, in Input) (image.Image, error) {
 	opts = opts.withDefaults()
 	if err := opts.validateDrawing(); err != nil {
 		return nil, err
@@ -74,12 +81,12 @@ func Draw(ctx context.Context, opts Options, locale, html string) (image.Image, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(opts.RenderTimeout))
 	defer cancel()
-	return r.draw(ctx, html, locale)
+	return r.draw(ctx, in)
 }
 
 // draw is the pipeline: parse, load the images the card names, lay out, paint.
-func (r *renderer) draw(ctx context.Context, html, locale string) (*image.RGBA, error) {
-	root, errs := dom.Parse(html)
+func (r *renderer) draw(ctx context.Context, in Input) (*image.RGBA, error) {
+	root, errs := dom.Parse(in.HTML)
 	if len(errs) > 0 {
 		out := make([]error, len(errs))
 		for i, e := range errs {
@@ -94,7 +101,7 @@ func (r *renderer) draw(ctx context.Context, html, locale string) (*image.RGBA, 
 	images := r.loadImages(ctx, root)
 	m := &text.Measurer{
 		Fonts:  r.fonts,
-		Locale: locale,
+		Locale: in.Locale,
 		Images: func(n *dom.Node) (float64, float64, bool) {
 			if img := images[n.Src]; img != nil {
 				b := img.Bounds()

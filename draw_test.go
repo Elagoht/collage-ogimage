@@ -15,7 +15,7 @@ import (
 // Draw validates what it is given: fonts listed with no FontFiles are an error,
 // not a nil dereference.
 func TestDrawRefusesFontsWithoutFiles(t *testing.T) {
-	_, err := Draw(t.Context(), Options{Fonts: []Font{{Family: "A", File: "a.ttf"}}}, "en", `<div></div>`)
+	_, err := Draw(t.Context(), Options{Fonts: []Font{{Family: "A", File: "a.ttf"}}}, Input{HTML: `<div></div>`, Locale: "en"})
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("Draw = %v, want ErrInvalidConfig", err)
 	}
@@ -32,8 +32,8 @@ func TestDrawKeepsToRenderTimeout(t *testing.T) {
 	}))
 	defer slow.Close()
 	start := time.Now()
-	_, _ = Draw(t.Context(), Options{ImageOrigins: []string{slow.URL}, RenderTimeout: collage.Duration(100 * time.Millisecond)}, "en",
-		`<div style="display:flex"><img src="`+slow.URL+`/a.png" style="width:10px;height:10px"></div>`)
+	_, _ = Draw(t.Context(), Options{ImageOrigins: []string{slow.URL}, RenderTimeout: collage.Duration(100 * time.Millisecond)},
+		Input{HTML: `<div style="display:flex"><img src="` + slow.URL + `/a.png" style="width:10px;height:10px"></div>`, Locale: "en"})
 	if took := time.Since(start); took > time.Second {
 		t.Errorf("Draw took %s with a 100ms renderTimeout", took)
 	}
@@ -43,7 +43,7 @@ func TestDrawKeepsToRenderTimeout(t *testing.T) {
 func TestDrawFollowsTheLocale(t *testing.T) {
 	card := `<div style="display:flex; width:400px; height:120px; background:#fff; color:#000; font-family:Go"><p style="font-size:64px; text-transform:uppercase">iiii</p></div>`
 	encode := func(locale string) []byte {
-		img, err := Draw(t.Context(), Options{}, locale, card)
+		img, err := Draw(t.Context(), Options{}, Input{HTML: card, Locale: locale})
 		if err != nil {
 			t.Fatal(err)
 		}

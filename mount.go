@@ -76,7 +76,7 @@ func (p *Plugin) drawBounded(ctx context.Context, spec string) ([]byte, error) {
 	go func() {
 		defer func() { <-p.sem }()
 		locale, html := decodeSpec(spec)
-		img, err := p.renderer.draw(ctx, html, locale)
+		img, err := p.renderer.draw(ctx, Input{HTML: html, Locale: locale})
 		if err != nil {
 			out <- result{err: err}
 			return

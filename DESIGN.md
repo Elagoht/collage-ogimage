@@ -563,8 +563,8 @@ The plugin produces images on request, which costs CPU and memory. The model:
   application's default locale or the one `-locale` names, within `RenderTimeout`, without starting a
   server. It is the loop for designing a card, and the way to keep golden images
   in a repository.
-- **Testing:** `ogimage.Draw(ctx, opts, locale, html) (image.Image, error)` draws card
-  HTML directly, for golden tests, validating `opts` and keeping to
+- **Testing:** `ogimage.Draw(ctx, opts, ogimage.Input{HTML, Locale}) (image.Image, error)`
+  draws card HTML directly, for golden tests, validating `opts` and keeping to
   `RenderTimeout`; `(*Plugin).Recorded(path)` returns the card a page
   recorded on its last render — its template, `Card`, HTML and URL — for asserting
   a page sets the card it should. It is a method on the plugin the test built,

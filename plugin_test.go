@@ -649,3 +649,39 @@ func TestDevelopmentCardsFollowIsHTTPS(t *testing.T) {
 		}
 	}
 }
+
+// A static build writes every card its pages carry however small the store's
+// caps: the cards are drawn after every page has rendered, by when the store
+// may have evicted the first ones' specs, in memory and on disk alike.
+func TestTheExportWritesMoreCardsThanTheStoreKeeps(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		opts func(dir string) Options
+	}{
+		{"maxEntries, memory", func(string) Options { return Options{MaxEntries: 1} }},
+		{"maxEntries, dir", func(dir string) Options { return Options{MaxEntries: 1, Dir: dir} }},
+		{"maxBytes, memory", func(string) Options { return Options{MaxBytes: 1} }},
+		{"maxBytes, dir", func(dir string) Options { return Options{MaxBytes: 1, Dir: dir} }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			opts := c.opts(t.TempDir())
+			opts.Templates, opts.Root = templates, "t"
+			og := New(opts)
+			var pages []collage.Registrable
+			for _, title := range []string{"one", "two", "three"} {
+				pages = append(pages, collage.NewPage(title).WithLayouts(layoutFragment()).
+					WithContent(collage.NewFragment(title+"-c", "page.html").WithData(collage.Load(func(_ context.Context, rc *collage.RenderContext) (string, error) {
+						return title, Set(rc, "og/post.html", Card{Title: title})
+					})).Build()).WithPath("en", "/"+title).Static().Build())
+			}
+			s := siteWith(t, []collage.Plugin{og}, onExample, pages...)
+			out := t.TempDir()
+			if report, err := collage.Build(context.Background(), s.App, collage.BuildOptions{OutDir: out}); err != nil {
+				t.Fatalf("Build: %v (%+v)", err, report)
+			}
+			if cards, _ := filepath.Glob(filepath.Join(out, "_og", "*.png")); len(cards) != 3 {
+				t.Errorf("%d cards exported, want 3", len(cards))
+			}
+		})
+	}
+}

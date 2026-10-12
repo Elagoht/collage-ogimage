@@ -45,11 +45,13 @@ type Plugin struct {
 	inflight map[string]*drawCall
 
 	// What renders recorded: the card of each page path (at most MaxEntries
-	// paths, the oldest dropped first, in recordedOrder), the cards a static
-	// build's pages hold, and in development how many cards each path made.
+	// paths, the oldest dropped first, in recordedOrder), the spec of each card
+	// a static build's pages hold, by hash — its own copy, since the store may
+	// evict a spec before the build draws it — and in development how many cards
+	// each path made.
 	recorded      map[string]RecordedCard
 	recordedOrder []string
-	built         map[string]bool
+	built         map[string]string
 	perPage       map[string]map[string]bool
 }
 
@@ -120,7 +122,7 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	p.sem = make(chan struct{}, p.cfg.Workers)
 	p.inflight = map[string]*drawCall{}
 	p.recorded = map[string]RecordedCard{}
-	p.built = map[string]bool{}
+	p.built = map[string]string{}
 	p.perPage = map[string]map[string]bool{}
 
 	opts := []collage.MountOption{collage.WithoutBuildCopy()}
@@ -202,7 +204,7 @@ func (p *Plugin) OnAfterRender(_ context.Context, ev *collage.AfterRenderEvent) 
 	p.mu.Lock()
 	p.remember(st.path, rec)
 	if ev.Static {
-		p.built[hash] = true
+		p.built[hash] = encodeSpec(st.locale, rec.HTML)
 	}
 	p.mu.Unlock()
 	return nil

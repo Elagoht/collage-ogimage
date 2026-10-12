@@ -12,10 +12,16 @@ import (
 
 // OnBuildFinished writes every card the build's pages carry to the output, under
 // Prefix, and fails the build for one that cannot be drawn (DESIGN.md §8.3).
+//
+// Each card is drawn from the spec the build kept for it, not from the store: by
+// now the store may have evicted the first pages' specs, past MaxEntries or
+// MaxBytes, from memory and disk alike.
 func (p *Plugin) OnBuildFinished(ctx context.Context, ev *collage.BuildFinishedEvent) error {
 	p.mu.Lock()
+	specs := make(map[string]string, len(p.built))
 	hashes := make([]string, 0, len(p.built))
-	for h := range p.built {
+	for h, spec := range p.built {
+		specs[h] = spec
 		hashes = append(hashes, h)
 	}
 	p.mu.Unlock()
@@ -27,7 +33,7 @@ func (p *Plugin) OnBuildFinished(ctx context.Context, ev *collage.BuildFinishedE
 		}
 	}
 	for _, h := range hashes {
-		body, err := p.image(ctx, h)
+		body, err := p.drawBounded(ctx, specs[h])
 		if err != nil {
 			ev.Error(p.cfg.Prefix+h+".png", "ogimage-draw", "the card could not be drawn: "+err.Error())
 			continue

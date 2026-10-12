@@ -17,7 +17,7 @@ app, err := collage.New(&collage.Config{
 })
 ```
 
-Requires collage v0.61.2 or later. The site's `Config.BaseURL` is required,
+Requires collage v0.61.4 or later. The site's `Config.BaseURL` is required,
 unless a plugin implementing `collage.OriginResolver` (elagoht/tenant) names each
 host's origin: networks only follow absolute `og:image` URLs.
 
@@ -422,6 +422,11 @@ Everything but the `fs.FS` fields can also come from the plugin configuration:
 | Before | Now |
 | --- | --- |
 | `ogimage.Draw(ctx, opts, locale, html)` | `ogimage.Draw(ctx, opts, ogimage.Input{HTML: html, Locale: locale})`: the two strings are named fields, so swapping them no longer compiles; an empty `Locale` still draws as `"en"` |
+
+Fixed: a static build with more cards than the store keeps (`maxEntries` or
+`maxBytes`, with or without `dir`) failed with `ogimage-draw` "file does not
+exist" for the cards evicted before they were drawn; the build now draws each
+card from its own copy of the card's spec. Requires collage v0.61.4.
 
 ## Changed in v0.3.0
 

@@ -6,6 +6,11 @@
   fields of `ogimage.Input` instead of two adjacent string arguments
   (`Draw(ctx, opts, locale, html)`), so passing them swapped no longer compiles.
   An empty `Locale` still draws as `"en"`.
+- Fixed: a static build with more cards than the store keeps (`maxEntries` or
+  `maxBytes`, with or without `dir`) failed with `ogimage-draw` "file does not
+  exist" for cards evicted before they were drawn; the build now draws each card
+  from its own copy of the spec.
+- Requires collage v0.61.4.
 
 ## v0.3.0
 

@@ -7,7 +7,7 @@ module github.com/Elagoht/collage-ogimage
 
 go 1.26.0
 
-require github.com/Elagoht/collage v0.61.0
+require github.com/Elagoht/collage v0.61.1
 
 require (
 	github.com/Elagoht/collage-meta v0.3.0

@@ -17,7 +17,7 @@ app, err := collage.New(&collage.Config{
 })
 ```
 
-Requires collage v0.61.0 or later. The site's `Config.BaseURL` is required,
+Requires collage v0.61.1 or later. The site's `Config.BaseURL` is required,
 unless a plugin implementing `collage.OriginResolver` (elagoht/tenant) names each
 host's origin: networks only follow absolute `og:image` URLs.
 
@@ -321,7 +321,7 @@ output, and a card that fails to draw fails the build.
 - **Draw one without the site.** `go run . ogimage og/post.html card.json > card.png`
   draws a template with the `Card` in `card.json` (`{"title": "…", "label": "…"}`),
   in the application's default locale; `ogimage -locale tr og/post.html card.json`
-  draws it in another. It keeps to `RenderTimeout`, as a served card does.
+  (or `-locale=tr`) draws it in another the application supports. It keeps to `RenderTimeout`, as a served card does.
 - **Check in a browser.** Open the template's HTML in a browser with sample text in
   place of `{{…}}`: inside the subset, it looks the same.
 
@@ -427,7 +427,7 @@ Everything but the `fs.FS` fields can also come from the plugin configuration:
 | `SiteInfo`, `PageInfo` | unexported; templates still read `.Site.Name`, `.Site.URL`, `.Site.Host`, `.Page.Path`, `.Page.Locale` |
 | build finding code `ogimage` | `ogimage-draw` |
 | `Recorded` kept every page that ever recorded a card | it keeps the last `MaxEntries` pages |
-| `ogimage <template> [card.json]` drew in `en` | it draws in the default locale, or `-locale <locale>` |
+| `ogimage <template> [card.json]` drew in `en` | it draws in the default locale, or `-locale <locale>` (`-locale=<locale>`), one of `Config.Locale.Supported` |
 | an `imageOrigins` entry with userinfo (`https://u@cms.example.com`), a fragment, or no host (`https://:8080`) was accepted | refused at startup, as `collage.ParseOrigin` refuses it |
 | in development, a card URL's scheme was `https` only for a TLS connection | it follows `collage.IsHTTPS`: TLS, or `X-Forwarded-Proto: https` from `Server.TrustedProxies` (from anyone when none are listed) |
 

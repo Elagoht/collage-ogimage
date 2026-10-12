@@ -2,7 +2,7 @@
 
 ## v0.3.0
 
-The v1 conventions; requires collage v0.61.0 and, in tests, collage-meta v0.3.0.
+The v1 conventions; requires collage v0.61.1 and, in tests, collage-meta v0.3.0.
 
 - One constructor: `New(opts Options)`. `NewWith` and `New()` are gone, and
   `Config` is `Options`.
@@ -10,7 +10,8 @@ The v1 conventions; requires collage v0.61.0 and, in tests, collage-meta v0.3.0.
   `FontFiles` panicked; they are `ErrInvalidConfig`), keeps to `RenderTimeout`,
   image fetches included (it ran on `context.Background`), and draws in the locale
   given (it was always `en`). The `ogimage` command draws in the application's
-  default locale, or `-locale`, within `RenderTimeout`.
+  default locale, or `-locale` / `-locale=` (a supported locale), within
+  `RenderTimeout`.
 - `renderTimeout` is a `collage.Duration`: a string such as `"5s"`; a number is an
   error at startup. `ogimage.Duration` is gone.
 - A negative `maxEntries` or `maxBytes` is an error at startup; it meant unlimited.

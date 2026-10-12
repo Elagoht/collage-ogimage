@@ -32,6 +32,7 @@ type Plugin struct {
 	devMode    bool
 	baseURL    string
 	locale     string
+	locales    []string
 	log        *slog.Logger
 	renderer   *renderer
 	store      *store
@@ -100,7 +101,7 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	if p.baseURL == "" && !host.MultiOrigin() {
 		return ErrNoBaseURL
 	}
-	p.locale, _ = host.Locales()
+	p.locale, p.locales = host.Locales()
 
 	var err error
 	if p.renderer, err = newRenderer(p.cfg); err != nil {

@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/Elagoht/collage/pkg/collage"
 )
 
 // command is "go run . ogimage [-locale tr] <template> [card.json]": a card
 // template drawn with the Card in card.json, in the application's default locale
-// or the one -locale names, written to standard output as a PNG — the loop for
+// or the one -locale (or -locale=tr) names, which must be one the application
+// supports, written to standard output as a PNG — the loop for
 // designing a card without a site (DESIGN.md §11). The draw keeps to
 // RenderTimeout, as a served card's does.
 func (p *Plugin) command() collage.Command {
@@ -23,11 +26,18 @@ func (p *Plugin) command() collage.Command {
 		Short: "Draw a card template to a PNG on standard output",
 		Run: func(ctx context.Context, args []string) error {
 			locale := p.locale
-			if len(args) >= 2 && args[0] == "-locale" {
-				locale, args = args[1], args[2:]
+			if len(args) > 0 {
+				if value, ok := strings.CutPrefix(args[0], "-locale="); ok {
+					locale, args = value, args[1:]
+				} else if args[0] == "-locale" && len(args) >= 2 {
+					locale, args = args[1], args[2:]
+				}
 			}
 			if len(args) < 1 || len(args) > 2 {
 				return errors.New(usage)
+			}
+			if !slices.Contains(p.locales, locale) {
+				return fmt.Errorf("ogimage: locale %q is not one the application supports: %s", locale, strings.Join(p.locales, ", "))
 			}
 			var card Card
 			if len(args) == 2 {

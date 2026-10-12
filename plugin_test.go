@@ -362,21 +362,79 @@ func TestTheCommandDrawsACard(t *testing.T) {
 	}
 }
 
+// upperCard uppercases "iiii": a Turkish card draws "İİİİ", an English one "IIII".
+const upperCard = `<div style="display:flex; width:400px; height:120px; background:#fff; color:#000; font-family:Go"><p style="font-size:64px; text-transform:uppercase">iiii</p></div>`
+
+// localeSite is a site whose default locale is def and which supports en and tr,
+// with the upper card among its templates.
+func localeSite(t *testing.T, def string) *Plugin {
+	t.Helper()
+	fsys := fstest.MapFS{"t/og/upper.html": {Data: []byte(upperCard)}}
+	for name, f := range templates {
+		fsys[name] = f
+	}
+	og := New(Options{Templates: fsys, Root: "t"})
+	siteWith(t, []collage.Plugin{og}, func(c *collage.Config) {
+		onExample(c)
+		c.Template.FS = fsys
+		c.Locale = collage.LocaleConfig{Default: def, Supported: []string{"en", "tr"}}
+	})
+	return og
+}
+
+// runCommand runs the ogimage command with args and returns what it wrote to
+// standard output.
+func runCommand(t *testing.T, og *Plugin, args ...string) ([]byte, error) {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	runErr := og.command().Run(context.Background(), args)
+	w.Close()
+	os.Stdout = old
+	var b bytes.Buffer
+	_, _ = b.ReadFrom(r)
+	return b.Bytes(), runErr
+}
+
+// The command draws in the locale -locale names, in either spelling, and in the
+// application's default locale without it.
 func TestTheCommandTakesALocale(t *testing.T) {
-	s := newSite(t, "")
-	cmd := s.og.command()
-	for _, args := range [][]string{{"-locale"}, {"-locale", "tr"}} {
-		if err := cmd.Run(context.Background(), args); err == nil {
+	og := localeSite(t, "en")
+	draw := func(args ...string) []byte {
+		t.Helper()
+		out, err := runCommand(t, og, args...)
+		if err != nil {
+			t.Fatalf("%q: %v", args, err)
+		}
+		return out
+	}
+	en, tr := draw("-locale", "en", "og/upper.html"), draw("-locale", "tr", "og/upper.html")
+	if bytes.Equal(en, tr) {
+		t.Error("-locale tr drew the card as en does")
+	}
+	if !bytes.Equal(draw("-locale=tr", "og/upper.html"), tr) {
+		t.Error("-locale=tr drew differently from -locale tr")
+	}
+	if !bytes.Equal(draw("og/upper.html"), en) {
+		t.Error("with no flag, an en site's card is not drawn in en")
+	}
+	if !bytes.Equal(draw("og/upper.html"), draw("-locale", "en", "og/upper.html")) {
+		t.Error("drawing is not repeatable")
+	}
+	if got, _ := runCommand(t, localeSite(t, "tr"), "og/upper.html"); !bytes.Equal(got, tr) {
+		t.Error("with no flag, a tr site's card is not drawn in tr")
+	}
+	for _, args := range [][]string{{"-locale"}, {"-locale", "tr"}, {"-locale=tr"}} {
+		if _, err := runCommand(t, og, args...); err == nil {
 			t.Errorf("%q: accepted with no template", args)
 		}
 	}
-	old := os.Stdout
-	os.Stdout, _ = os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	err := cmd.Run(context.Background(), []string{"-locale", "tr", "og/post.html"})
-	os.Stdout.Close()
-	os.Stdout = old
-	if err != nil {
-		t.Fatal(err)
+	if _, err := runCommand(t, og, "-locale", "xx", "og/upper.html"); err == nil || !strings.Contains(err.Error(), `"xx"`) {
+		t.Errorf("an unsupported locale: %v", err)
 	}
 }
 
@@ -505,15 +563,22 @@ func TestRecordedIsCapped(t *testing.T) {
 
 // What plugins-config.json may not say: a duration as a number, a negative cap.
 func TestConfigurationRefusals(t *testing.T) {
-	for name, raw := range map[string]string{
-		"number renderTimeout": `{"renderTimeout": 5000000000}`,
-		"negative maxEntries":  `{"maxEntries": -1}`,
-		"negative maxBytes":    `{"maxBytes": -1}`,
+	for name, c := range map[string]struct {
+		raw  string
+		want func(error) bool
+	}{
+		"number renderTimeout": {`{"renderTimeout": 5000000000}`, func(err error) bool { return strings.Contains(err.Error(), `"renderTimeout"`) }},
+		"negative maxEntries": {`{"maxEntries": -1}`, func(err error) bool {
+			return errors.Is(err, ErrInvalidConfig) && strings.Contains(err.Error(), "maxEntries")
+		}},
+		"negative maxBytes": {`{"maxBytes": -1}`, func(err error) bool {
+			return errors.Is(err, ErrInvalidConfig) && strings.Contains(err.Error(), "maxBytes")
+		}},
 	} {
 		opts := append(siteOptions([]collage.Plugin{New(Options{Templates: templates, Root: "t"})}, onExample),
-			collagetest.WithPluginConfig(Name, raw))
-		if _, err := collagetest.TrySite(t, opts...); err == nil {
-			t.Errorf("%s: started", name)
+			collagetest.WithPluginConfig(Name, c.raw))
+		if _, err := collagetest.TrySite(t, opts...); err == nil || !c.want(err) {
+			t.Errorf("%s: start = %v", name, err)
 		}
 	}
 	_, err := collagetest.TrySite(t, append(siteOptions([]collage.Plugin{New(Options{Templates: templates, Root: "t"})}, onExample),

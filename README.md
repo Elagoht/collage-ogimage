@@ -17,7 +17,7 @@ app, err := collage.New(&collage.Config{
 })
 ```
 
-Requires collage v0.61.1 or later. The site's `Config.BaseURL` is required,
+Requires collage v0.61.2 or later. The site's `Config.BaseURL` is required,
 unless a plugin implementing `collage.OriginResolver` (elagoht/tenant) names each
 host's origin: networks only follow absolute `og:image` URLs.
 
